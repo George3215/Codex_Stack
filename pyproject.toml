@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moon-rock-stack"
+version = "0.1.0"
+description = "MuJoCo experiments for angular lunar-rock dry stacking under Earth and Moon gravity."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "matplotlib",
+  "pyyaml",
+  "mujoco==3.3.6",
+]
+keywords = [
+  "mujoco",
+  "lunar-regolith",
+  "dry-stacking",
+  "robotics",
+  "simulation",
+]
+
+[project.urls]
+Repository = "https://github.com/your-org/moon-rock-stack"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["moon_rock_stack*"]
+
+[tool.py_compile_check]
+paths = [
+  "moon_rock_stack",
+  "scripts",
+]

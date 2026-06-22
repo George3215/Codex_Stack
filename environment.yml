@@ -1,0 +1,20 @@
+name: moon-rock-stack
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy=1.26.4
+  - matplotlib
+  - pyyaml
+  - pip:
+      - mujoco==3.3.6
+      - python-pptx==1.0.2
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.11.0+cu128
+      - torchvision==0.26.0+cu128
+      - torchaudio==2.11.0+cu128
+      - scikit-learn==1.9.0
+      - pandas==3.0.3
+      - tqdm==4.68.3
+      - tensorboard==2.20.0

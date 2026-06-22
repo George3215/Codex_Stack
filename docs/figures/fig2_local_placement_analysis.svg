@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="950" viewBox="0 0 1600 950">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #d6dbe6; stroke-width: 2; rx: 14; }
+      .box { fill: #ffffff; stroke: #263244; stroke-width: 2; rx: 10; }
+      .obs { fill: #edf7ff; stroke: #2e6fa3; }
+      .cand { fill: #fff6e5; stroke: #b76a12; }
+      .net { fill: #f3efff; stroke: #6b4cc2; }
+      .sim { fill: #eefaf1; stroke: #2c7a4b; }
+      .fail { fill: #fff0f0; stroke: #b33a3a; }
+      .title { font: 700 34px Arial, "Microsoft YaHei", sans-serif; fill: #1f2937; }
+      .subtitle { font: 400 18px Arial, "Microsoft YaHei", sans-serif; fill: #4b5563; }
+      .label { font: 700 22px Arial, "Microsoft YaHei", sans-serif; fill: #1f2937; }
+      .text { font: 400 17px Arial, "Microsoft YaHei", sans-serif; fill: #374151; }
+      .small { font: 400 14px Arial, "Microsoft YaHei", sans-serif; fill: #4b5563; }
+      .axis { stroke: #94a3b8; stroke-width: 1; }
+      .grid { stroke: #e5e7eb; stroke-width: 1; }
+      .wall { fill: #c8b79c; stroke: #55483a; stroke-width: 2; }
+      .candidate { fill: #efc16f; stroke: #7a4b08; stroke-width: 3; fill-opacity: 0.72; }
+      .target { fill: none; stroke: #dc2626; stroke-width: 3; stroke-dasharray: 8 6; }
+      .support { fill: #7dbb8d; stroke: #24633a; stroke-width: 2; fill-opacity: 0.82; }
+      .arrow { stroke: #374151; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .dash { stroke-dasharray: 8 6; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#374151"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="950"/>
+  <text class="title" x="60" y="62">Figure 2. 局部落点分析：从墙体观测到候选位姿评分</text>
+  <text class="subtitle" x="60" y="94">每个 slot 不直接随机放置，而是把当前墙体局部观测、候选石头几何和目标位置合成候选，随后由网络和短仿真共同筛选。</text>
+
+  <rect class="panel" x="50" y="125" width="1500" height="770"/>
+
+  <rect class="box obs" x="90" y="170" width="360" height="255"/>
+  <text class="label" x="120" y="210">局部观测 Observation</text>
+  <text class="text" x="120" y="245">输入来自当前墙体，不是测试后统计：</text>
+  <text class="text" x="120" y="280">front/top depth 或局部 support map</text>
+  <text class="text" x="120" y="310">已有石头 footprint / height / support count</text>
+  <text class="text" x="120" y="340">目标槽位 course、role、target x/y</text>
+  <text class="text" x="120" y="370">重力：Earth 或 Moon</text>
+
+  <rect x="115" y="455" width="470" height="350" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" rx="10"/>
+  <text class="label" x="135" y="490">Top-view local support map</text>
+  <g transform="translate(150,520)">
+    <rect x="0" y="0" width="390" height="245" fill="#f9fafb" stroke="#94a3b8" stroke-width="2"/>
+    <g>
+      <line class="grid" x1="0" y1="35" x2="390" y2="35"/>
+      <line class="grid" x1="0" y1="70" x2="390" y2="70"/>
+      <line class="grid" x1="0" y1="105" x2="390" y2="105"/>
+      <line class="grid" x1="0" y1="140" x2="390" y2="140"/>
+      <line class="grid" x1="0" y1="175" x2="390" y2="175"/>
+      <line class="grid" x1="0" y1="210" x2="390" y2="210"/>
+      <line class="grid" x1="65" y1="0" x2="65" y2="245"/>
+      <line class="grid" x1="130" y1="0" x2="130" y2="245"/>
+      <line class="grid" x1="195" y1="0" x2="195" y2="245"/>
+      <line class="grid" x1="260" y1="0" x2="260" y2="245"/>
+      <line class="grid" x1="325" y1="0" x2="325" y2="245"/>
+    </g>
+    <rect class="wall" x="35" y="88" width="62" height="38" transform="rotate(-7 66 107)"/>
+    <rect class="wall" x="108" y="95" width="70" height="42" transform="rotate(6 143 116)"/>
+    <rect class="wall" x="185" y="86" width="78" height="44" transform="rotate(-3 224 108)"/>
+    <rect class="wall" x="275" y="92" width="66" height="40" transform="rotate(9 308 112)"/>
+    <rect class="support" x="114" y="55" width="120" height="88" rx="18"/>
+    <ellipse class="target" cx="206" cy="96" rx="56" ry="34"/>
+    <ellipse class="candidate" cx="222" cy="90" rx="72" ry="34" transform="rotate(-12 222 90)"/>
+    <text class="small" x="242" y="51">candidate footprint</text>
+    <text class="small" x="95" y="32">support region</text>
+    <text class="small" x="162" y="176">target slot</text>
+  </g>
+
+  <rect class="box cand" x="545" y="170" width="310" height="255"/>
+  <text class="label" x="575" y="210">候选石头 Rock</text>
+  <polygon points="610,260 664,222 734,238 780,288 752,350 674,372 605,330" fill="#c8b79c" stroke="#55483a" stroke-width="3"/>
+  <line x1="620" y1="259" x2="753" y2="350" stroke="#8a6d4d" stroke-width="2"/>
+  <line x1="664" y1="222" x2="674" y2="372" stroke="#8a6d4d" stroke-width="2"/>
+  <text class="text" x="575" y="385">几何特征：bbox、主面、支撑面、粗糙度、棱角度</text>
+
+  <rect class="box cand" x="925" y="170" width="280" height="255"/>
+  <text class="label" x="955" y="210">候选位姿生成</text>
+  <text class="text" x="955" y="250">围绕 target slot 采样</text>
+  <text class="text" x="955" y="280">yaw / x-y offset / z release</text>
+  <text class="text" x="955" y="310">先验门控：墙线、支撑、重心</text>
+  <text class="text" x="955" y="340">输出 K 个候选 pose</text>
+
+  <rect class="box net" x="1280" y="170" width="230" height="255"/>
+  <text class="label" x="1305" y="210">网络评分</text>
+  <text class="text" x="1305" y="250">SupportMap CNN</text>
+  <text class="text" x="1305" y="280">PoseRiskNet</text>
+  <text class="text" x="1305" y="310">StoneSlotNet</text>
+  <text class="text" x="1305" y="340">输出 top-k / risk</text>
+
+  <rect class="box sim" x="670" y="520" width="315" height="185"/>
+  <text class="label" x="700" y="560">短物理验证</text>
+  <text class="text" x="700" y="595">MuJoCo settle each candidate</text>
+  <text class="text" x="700" y="625">记录误差、扰动、速度、height gain</text>
+  <text class="text" x="700" y="655">选择当前 best feasible placement</text>
+
+  <rect class="box fail" x="1090" y="520" width="380" height="185"/>
+  <text class="label" x="1120" y="560">日志与标签</text>
+  <text class="text" x="1120" y="595">candidate_pose_log.csv</text>
+  <text class="text" x="1120" y="625">placement_log.csv / failure_cases.csv</text>
+  <text class="text" x="1120" y="655">成功样本 + 失败负样本全部保留</text>
+
+  <path class="arrow" d="M450 250 H545"/>
+  <path class="arrow" d="M855 250 H925"/>
+  <path class="arrow" d="M1205 250 H1280"/>
+  <path class="arrow" d="M1395 425 C1395 482 985 474 985 560"/>
+  <path class="arrow" d="M585 630 H670"/>
+  <path class="arrow" d="M985 612 H1090"/>
+  <path class="arrow dash" d="M1280 705 C1160 820 390 850 220 805"/>
+
+  <rect x="1030" y="750" width="440" height="75" fill="#fbfbfd" stroke="#d6dbe6" stroke-width="2" rx="10"/>
+  <text class="text" x="1060" y="785">核心原则：网络输入只使用放置前可获得信息；</text>
+  <text class="text" x="1060" y="812">仿真后的误差、速度、漂移只用于标签和评估。</text>
+</svg>

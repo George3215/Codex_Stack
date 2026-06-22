@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="950" viewBox="0 0 1600 950">
+  <defs>
+    <style>
+      .bg { fill: #f7f8fb; }
+      .panel { fill: #ffffff; stroke: #d6dbe6; stroke-width: 2; rx: 14; }
+      .box { fill: #fdfefe; stroke: #233044; stroke-width: 2; rx: 10; }
+      .input { fill: #eef6ff; stroke: #336fae; }
+      .sim { fill: #fff6e8; stroke: #b76a12; }
+      .data { fill: #effaf3; stroke: #2c7a4b; }
+      .model { fill: #f3efff; stroke: #6b4cc2; }
+      .warn { fill: #fff0f0; stroke: #b33a3a; }
+      .title { font: 700 34px Arial, "Microsoft YaHei", sans-serif; fill: #1f2937; }
+      .subtitle { font: 400 18px Arial, "Microsoft YaHei", sans-serif; fill: #4b5563; }
+      .label { font: 700 22px Arial, "Microsoft YaHei", sans-serif; fill: #1f2937; }
+      .text { font: 400 17px Arial, "Microsoft YaHei", sans-serif; fill: #374151; }
+      .small { font: 400 14px Arial, "Microsoft YaHei", sans-serif; fill: #4b5563; }
+      .tag { font: 700 14px Arial, "Microsoft YaHei", sans-serif; fill: #ffffff; }
+      .arrow { stroke: #374151; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .arrow2 { stroke: #7c3aed; stroke-width: 2.4; fill: none; marker-end: url(#arrowPurple); }
+      .dash { stroke-dasharray: 8 6; }
+      .stone { fill: #b7a58b; stroke: #5e5244; stroke-width: 2; }
+      .stone2 { fill: #d2c0a3; stroke: #5e5244; stroke-width: 2; }
+      .moon { fill: #d9dee8; stroke: #8a93a5; stroke-width: 2; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#374151"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="950"/>
+  <text class="title" x="60" y="62">Figure 1. 月面干叠石墙的数据飞轮与实验闭环</text>
+  <text class="subtitle" x="60" y="94">目标：用论文/力学先验约束生成与搜索，用 MuJoCo 产生正负样本，再训练小网络逐步减少启发式搜索。</text>
+
+  <rect class="panel" x="45" y="125" width="1510" height="760"/>
+
+  <rect class="box input" x="85" y="180" width="260" height="150"/>
+  <text class="label" x="110" y="220">文献与几何先验</text>
+  <text class="text" x="110" y="255">dry stacking / statics</text>
+  <text class="text" x="110" y="282">多凸多面体、棱角、主面</text>
+  <text class="text" x="110" y="309">摩擦、重力、错缝、互锁</text>
+
+  <rect class="box input" x="420" y="180" width="280" height="150"/>
+  <text class="label" x="450" y="220">石头库生成</text>
+  <text class="text" x="450" y="255">fractal polyhedral rocks</text>
+  <text class="text" x="450" y="282">非平滑、无尖刺、非薄片</text>
+  <text class="text" x="450" y="309">特征提取与聚类分类</text>
+
+  <rect class="box sim" x="790" y="180" width="290" height="150"/>
+  <text class="label" x="820" y="220">结构化堆叠任务</text>
+  <text class="text" x="820" y="255">单面墙 / 石柱 / 高墙</text>
+  <text class="text" x="820" y="282">Earth vs Moon gravity</text>
+  <text class="text" x="820" y="309">slot-by-slot placement</text>
+
+  <rect class="box sim" x="1170" y="180" width="300" height="150"/>
+  <text class="label" x="1200" y="220">MuJoCo 物理验证</text>
+  <text class="text" x="1200" y="255">短 settle + final hold</text>
+  <text class="text" x="1200" y="282">接触、漂移、速度、失败</text>
+  <text class="text" x="1200" y="309">RGB-D / state / logs</text>
+
+  <rect class="box data" x="1150" y="455" width="320" height="175"/>
+  <text class="label" x="1180" y="497">数据集构建</text>
+  <text class="text" x="1180" y="532">placement examples</text>
+  <text class="text" x="1180" y="559">candidate pose examples</text>
+  <text class="text" x="1180" y="586">support-map tensors</text>
+  <text class="small" x="1180" y="614">后验仿真量只作为标签，不作为输入</text>
+
+  <rect class="box model" x="760" y="455" width="300" height="175"/>
+  <text class="label" x="790" y="497">小网络训练</text>
+  <text class="text" x="790" y="532">StoneSlotNet 选石</text>
+  <text class="text" x="790" y="559">SupportMap CNN 排位姿</text>
+  <text class="text" x="790" y="586">PoseRisk / WallStateCritic</text>
+  <text class="small" x="790" y="614">输出 top-k / risk / repair cue</text>
+
+  <rect class="box model" x="390" y="455" width="300" height="175"/>
+  <text class="label" x="420" y="497">闭环策略</text>
+  <text class="text" x="420" y="532">神经网络缩小候选池</text>
+  <text class="text" x="420" y="559">启发式保留干砌先验</text>
+  <text class="text" x="420" y="586">MuJoCo 做最终验证</text>
+  <text class="small" x="420" y="614">当前默认：v4 support-map + PoseRisk v5</text>
+
+  <rect class="box warn" x="85" y="455" width="240" height="175"/>
+  <text class="label" x="115" y="497">失败样本回流</text>
+  <text class="text" x="115" y="532">散墙、滑移、出墙</text>
+  <text class="text" x="115" y="559">middle/cap 失败</text>
+  <text class="text" x="115" y="586">作为负样本学习</text>
+  <text class="small" x="115" y="614">若方向无效，记录并停止强替换</text>
+
+  <path class="arrow" d="M345 255 H420"/>
+  <path class="arrow" d="M700 255 H790"/>
+  <path class="arrow" d="M1080 255 H1170"/>
+  <path class="arrow" d="M1320 330 V455"/>
+  <path class="arrow" d="M1150 542 H1060"/>
+  <path class="arrow" d="M760 542 H690"/>
+  <path class="arrow" d="M540 455 V330"/>
+  <path class="arrow2 dash" d="M390 542 H325"/>
+  <path class="arrow2 dash" d="M205 455 V345 C205 340 205 335 205 330"/>
+  <path class="arrow2 dash" d="M205 630 C205 742 1320 742 1320 630"/>
+
+  <rect x="80" y="690" width="1380" height="135" fill="#fbfbfd" stroke="#d6dbe6" stroke-width="2" rx="12"/>
+  <text class="label" x="110" y="730">当前实验得到的经验</text>
+  <text class="text" x="110" y="765">1. 只提高离线 top-1/top-3 不等于闭环更稳；网络如果过度 top-k 裁剪，会把互锁候选提前删掉。</text>
+  <text class="text" x="110" y="796">2. middle/cap 是主要失败来源，下一轮 critic 应显式预测“该候选是否让后续层更容易成功”。</text>
+  <text class="text" x="110" y="827">3. 失败案例不是废数据，而是负样本；若某条网络路线闭环无效，记录后回到可解释先验。</text>
+
+  <polygon class="stone" points="112,375 165,348 228,370 214,424 143,432"/>
+  <polygon class="stone2" points="154,350 210,330 255,355 234,393 178,397"/>
+  <circle class="moon" cx="1375" cy="735" r="42"/>
+  <circle fill="#c4cad6" cx="1360" cy="722" r="7"/>
+  <circle fill="#c4cad6" cx="1390" cy="752" r="10"/>
+  <circle fill="#c4cad6" cx="1378" cy="710" r="4"/>
+</svg>

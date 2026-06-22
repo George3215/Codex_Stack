@@ -1,0 +1,30 @@
+﻿{
+    "generated_at":  "2026-06-20T21:26:29",
+    "source_machine":  "DESKTOP-ML5VHFK",
+    "source_root":  "D:\\MoonStack\\experiments\\moon_rock_stack",
+    "handoff_dir":  "D:\\MoonStack\\experiments\\moon_rock_stack\\paper_handoff\\lunar_rock_stacking_handoff_20260620_212629",
+    "intended_receiver":  "DESKTOP-DRR635P / F:\\LoopFarmPaperRadar\\lunar-rock-stacking",
+    "docs":  [
+                 "HIGHCOURSE_4COURSE_RESULTS_20260620.md",
+                 "NETWORK_DESIGN_RATIONALE_AND_LOGGING_20260620.md",
+                 "CLOSED_LOOP_NEURAL_RANKER_RESULTS_20260619.md",
+                 "PHASE_4_LAYER_STACKING_SUMMARY_20260618.md",
+                 "DRY_STACKING_STRUCTURE_PLAN.md",
+                 "hibbeler_statics_dry_stacking_priors.md"
+             ],
+    "runs":  [
+                 "20260620_highcourse_4course_curriculum_ranker_top3_seed97003_v1",
+                 "20260620_torch_support_map_cnn_4course_curriculum_score_v1",
+                 "20260620_learning_dataset_4course_curriculum_v1",
+                 "20260620_highcourse_4course_presim_pose_top3_seed97001_v1",
+                 "20260620_highcourse_4course_expanded_quality_top3_seed97002_v1",
+                 "20260619_closed_loop_wall4_neural_presim_top3_v1",
+                 "20260619_closed_loop_wall4_baseline_full6_v1"
+             ],
+    "next_paper_tasks":  [
+                             "Mine ICRA/RAL/TRO/RSS papers on irregular object stacking and construction robotics",
+                             "Compare with dry-stone / rock stacking prior work",
+                             "Design ICRA paper story and experiment matrix",
+                             "Generate missing-experiment checklist for stone-stacking machine"
+                         ]
+}

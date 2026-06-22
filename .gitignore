@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local generated experiment data.
+# These files are intentionally preserved on disk, but not committed by default.
+batch_runs/
+generated/
+generated*/
+reports/
+
+# Heavy simulation artifacts. Force-add selected files only when they are explicitly needed.
+*.obj
+*.stl
+*.npz
+*.npy
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.avi
+
+# Generated MuJoCo worlds and local logs
+mjcf/
+meshes/
+states/
+captures*/
+*.log
+
+# Local git snapshot logs.
+# Keep these logs on disk; do not create a new commit every time the sync runs.
+git_sync_logs/
+
+# Binary handoff bundles stay local unless explicitly force-added.
+*.zip

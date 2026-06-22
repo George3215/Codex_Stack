@@ -1,0 +1,106 @@
+{
+  "created_at": "2026-06-20T17:38:01",
+  "batch_root": "D:\\MoonStack\\experiments\\moon_rock_stack\\batch_runs",
+  "output_dir": "D:\\MoonStack\\experiments\\moon_rock_stack\\batch_runs\\20260620_learning_dataset_4course_curriculum_v1",
+  "run_dir_count": 7,
+  "run_example_count": 25,
+  "placement_example_count": 600,
+  "candidate_pose_example_count": 12484,
+  "assignment_candidate_example_count": 552,
+  "placement_by_gravity": {
+    "earth": {
+      "examples": 384,
+      "success": 213,
+      "failure": 56,
+      "skipped": 115
+    },
+    "moon": {
+      "examples": 216,
+      "success": 102,
+      "failure": 32,
+      "skipped": 82
+    }
+  },
+  "placement_by_role": {
+    "base": {
+      "examples": 175,
+      "success": 113,
+      "failure": 12,
+      "skipped": 50
+    },
+    "cap": {
+      "examples": 125,
+      "success": 44,
+      "failure": 29,
+      "skipped": 52
+    },
+    "middle": {
+      "examples": 300,
+      "success": 158,
+      "failure": 47,
+      "skipped": 95
+    }
+  },
+  "placement_by_source_kind": {
+    "bearing_block_clast": {
+      "examples": 116,
+      "success": 77,
+      "failure": 6,
+      "skipped": 33
+    },
+    "buttress_clast": {
+      "examples": 10,
+      "success": 3,
+      "failure": 1,
+      "skipped": 6
+    },
+    "cap_block_clast": {
+      "examples": 50,
+      "success": 21,
+      "failure": 10,
+      "skipped": 19
+    },
+    "compact_block_clast": {
+      "examples": 163,
+      "success": 83,
+      "failure": 24,
+      "skipped": 56
+    },
+    "course_block_clast": {
+      "examples": 180,
+      "success": 90,
+      "failure": 30,
+      "skipped": 60
+    },
+    "equant_clast": {
+      "examples": 45,
+      "success": 26,
+      "failure": 12,
+      "skipped": 7
+    },
+    "subangular_block": {
+      "examples": 8,
+      "success": 7,
+      "failure": 0,
+      "skipped": 1
+    },
+    "tie_bridge_clast": {
+      "examples": 16,
+      "success": 3,
+      "failure": 3,
+      "skipped": 10
+    },
+    "wall_block_clast": {
+      "examples": 12,
+      "success": 5,
+      "failure": 2,
+      "skipped": 5
+    }
+  },
+  "warnings": [],
+  "known_limitations": [
+    "placement_examples.csv records committed placements, skipped slots, and best rejected slot summaries.",
+    "candidate_pose_examples.csv contains sampled candidate poses only for runs that have candidate_pose_log.csv.",
+    "Older runs do not have dense candidate-pose labels."
+  ]
+}

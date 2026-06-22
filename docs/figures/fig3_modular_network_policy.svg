@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="950" viewBox="0 0 1600 950">
+  <defs>
+    <style>
+      .bg { fill: #f7f8fb; }
+      .panel { fill: #ffffff; stroke: #d6dbe6; stroke-width: 2; rx: 14; }
+      .box { fill: #ffffff; stroke: #263244; stroke-width: 2; rx: 10; }
+      .input { fill: #eef6ff; stroke: #336fae; }
+      .net { fill: #f3efff; stroke: #6b4cc2; }
+      .prior { fill: #fff6e8; stroke: #b76a12; }
+      .sim { fill: #effaf3; stroke: #2c7a4b; }
+      .risk { fill: #fff0f0; stroke: #b33a3a; }
+      .title { font: 700 34px Arial, "Microsoft YaHei", sans-serif; fill: #1f2937; }
+      .subtitle { font: 400 18px Arial, "Microsoft YaHei", sans-serif; fill: #4b5563; }
+      .label { font: 700 22px Arial, "Microsoft YaHei", sans-serif; fill: #1f2937; }
+      .text { font: 400 17px Arial, "Microsoft YaHei", sans-serif; fill: #374151; }
+      .small { font: 400 14px Arial, "Microsoft YaHei", sans-serif; fill: #4b5563; }
+      .arrow { stroke: #374151; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .purple { stroke: #7c3aed; }
+      .dash { stroke-dasharray: 8 6; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#374151"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="950"/>
+  <text class="title" x="60" y="62">Figure 3. 模块化小网络策略：逐步替代启发式，而不是一次端到端</text>
+  <text class="subtitle" x="60" y="94">早期阶段使用可解释小网络组合：每个网络只替代一个决策环节，并保留物理验证作为安全阀。</text>
+
+  <rect class="panel" x="50" y="125" width="1500" height="770"/>
+
+  <rect class="box input" x="95" y="185" width="290" height="160"/>
+  <text class="label" x="125" y="225">已知输入</text>
+  <text class="text" x="125" y="260">石头几何与聚类</text>
+  <text class="text" x="125" y="290">目标结构 slot/role/course</text>
+  <text class="text" x="125" y="320">当前墙体局部 depth/support map</text>
+
+  <rect class="box prior" x="95" y="430" width="290" height="160"/>
+  <text class="label" x="125" y="470">干砌先验</text>
+  <text class="text" x="125" y="505">主面承压、错缝、互锁</text>
+  <text class="text" x="125" y="535">墙线约束、重心、摩擦</text>
+  <text class="text" x="125" y="565">Moon/Earth 重力对照</text>
+
+  <rect class="box net" x="470" y="155" width="290" height="140"/>
+  <text class="label" x="500" y="195">StoneSlotNet</text>
+  <text class="text" x="500" y="230">输入：slot + rock geometry</text>
+  <text class="text" x="500" y="260">输出：该石头是否适合槽位</text>
+
+  <rect class="box net" x="470" y="340" width="290" height="155"/>
+  <text class="label" x="500" y="380">SupportMap CNN</text>
+  <text class="text" x="500" y="415">输入：local support map</text>
+  <text class="text" x="500" y="445">+ candidate pose + rock</text>
+  <text class="text" x="500" y="475">输出：候选位姿 ranking score</text>
+
+  <rect class="box net" x="470" y="540" width="290" height="145"/>
+  <text class="label" x="500" y="580">PoseRiskNet</text>
+  <text class="text" x="500" y="615">输入：候选位姿 + 几何 + 重力</text>
+  <text class="text" x="500" y="645">输出：预仿真风险概率</text>
+
+  <rect class="box net" x="845" y="250" width="300" height="160"/>
+  <text class="label" x="875" y="290">候选融合与裁剪</text>
+  <text class="text" x="875" y="325">stone-fit top-k</text>
+  <text class="text" x="875" y="355">pose-rank top-k</text>
+  <text class="text" x="875" y="385">risk penalty + dry-stacking prior</text>
+
+  <rect class="box sim" x="845" y="500" width="300" height="160"/>
+  <text class="label" x="875" y="540">MuJoCo 短仿真</text>
+  <text class="text" x="875" y="575">对少量候选进行 settle</text>
+  <text class="text" x="875" y="605">选择目标误差/扰动/速度较低者</text>
+  <text class="text" x="875" y="635">不稳定候选进入负样本</text>
+
+  <rect class="box risk" x="1235" y="185" width="260" height="185"/>
+  <text class="label" x="1265" y="225">WallStateCritic</text>
+  <text class="text" x="1265" y="260">下一阶段重点</text>
+  <text class="text" x="1265" y="290">预测后续 middle/cap 是否更易成功</text>
+  <text class="small" x="1265" y="325">当前已训练，但 top-1 不足</text>
+
+  <rect class="box sim" x="1235" y="500" width="260" height="160"/>
+  <text class="label" x="1265" y="540">执行放置</text>
+  <text class="text" x="1265" y="575">低空释放 / settle</text>
+  <text class="text" x="1265" y="605">final hold</text>
+  <text class="text" x="1265" y="635">记录成功/失败与图像</text>
+
+  <path class="arrow" d="M385 240 H470"/>
+  <path class="arrow" d="M385 300 C430 300 430 418 470 418"/>
+  <path class="arrow" d="M385 510 C430 510 430 612 470 612"/>
+  <path class="arrow" d="M760 225 C805 225 805 310 845 310"/>
+  <path class="arrow" d="M760 418 H845"/>
+  <path class="arrow" d="M760 612 C810 612 810 390 845 390"/>
+  <path class="arrow" d="M1145 330 H1235"/>
+  <path class="arrow" d="M995 410 V500"/>
+  <path class="arrow" d="M1145 580 H1235"/>
+  <path class="arrow dash" d="M1365 500 V370"/>
+
+  <rect x="100" y="735" width="1385" height="95" fill="#fbfbfd" stroke="#d6dbe6" stroke-width="2" rx="12"/>
+  <text class="label" x="130" y="775">当前策略选择</text>
+  <text class="text" x="130" y="810">低层可以使用网络缩小候选；高层仍保留启发式 + MuJoCo 验证。完全让网络单点输出位置还不严谨。</text>
+</svg>
