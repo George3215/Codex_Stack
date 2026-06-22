@@ -102,6 +102,8 @@ try {
     & git diff --cached --quiet
     if ($LASTEXITCODE -eq 0) {
         LogLine "no_staged_changes"
+        RunGit @("push", "-u", $RemoteName, $Branch)
+        LogLine "push_complete remote=$RemoteName branch=$Branch"
         exit 0
     }
 
