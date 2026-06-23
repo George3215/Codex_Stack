@@ -249,6 +249,8 @@ def main() -> int:
                     "--test-fraction",
                     "0.2",
                     "--split-by-run",
+                    "--device",
+                    "cpu",
                     "--seed",
                     str(args.seed + 101),
                 ],

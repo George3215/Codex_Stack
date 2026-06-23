@@ -348,9 +348,19 @@ def minibatch_indices(count: int, batch_size: int, rng: np.random.Generator) -> 
 
 
 def predict(model: dict[str, np.ndarray], x: np.ndarray) -> np.ndarray:
-    hidden = np.maximum(x @ model["w1"] + model["b1"], 0.0)
-    logits = hidden @ model["w2"] + model["b2"]
+    hidden = np.maximum(safe_linear(x, model["w1"], model["b1"]), 0.0)
+    logits = safe_linear(hidden, model["w2"], model["b2"])
     return sigmoid(logits)
+
+
+def safe_linear(x: np.ndarray, weight: np.ndarray, bias: np.ndarray, chunk_size: int = 512) -> np.ndarray:
+    """Avoid NumPy BLAS matmul on Windows builds that can fail natively."""
+    outputs: list[np.ndarray] = []
+    for start in range(0, x.shape[0], chunk_size):
+        chunk = np.asarray(x[start : start + chunk_size], dtype=np.float64)
+        values = np.sum(chunk[:, :, None] * weight[None, :, :], axis=1)
+        outputs.append(values + bias)
+    return np.vstack(outputs) if outputs else np.empty((0, bias.shape[1]), dtype=np.float64)
 
 
 def sigmoid(x: np.ndarray) -> np.ndarray:
