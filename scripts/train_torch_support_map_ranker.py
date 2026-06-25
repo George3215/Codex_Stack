@@ -183,6 +183,7 @@ def main() -> int:
     metrics = {
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "tensor_dir": str(tensor_dir),
+        "extra_tensor_dirs": [str(path.resolve()) for path in args.extra_tensor_dir],
         "output_dir": str(output_dir),
         "device": str(device),
         "torch_version": torch.__version__,
@@ -245,6 +246,13 @@ def main() -> int:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a PyTorch CNN groupwise ranker on local support maps.")
     parser.add_argument("--tensor-dir", type=Path, required=True)
+    parser.add_argument(
+        "--extra-tensor-dir",
+        action="append",
+        type=Path,
+        default=[],
+        help="Optional additional tensor directories to concatenate at load time without re-rendering or re-packing.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -295,13 +303,30 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_tensor_bundle(tensor_dir: Path, rock_embedding_npz: Path | None, args: argparse.Namespace) -> TensorBundle:
-    rows = read_csv(tensor_dir / "examples_index.csv")
-    if not rows:
-        raise SystemExit(f"No examples_index.csv found in {tensor_dir}")
-    summary_path = tensor_dir / "summary.json"
-    tensor_summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
+    tensor_dirs = [tensor_dir] + [path.resolve() for path in args.extra_tensor_dir]
+    rows: list[dict[str, str]] = []
+    shard_entries: list[tuple[Path, str]] = []
+    tensor_summary: dict[str, Any] = {}
+    numeric_feature_names: list[str] = []
+    for index, source_dir in enumerate(tensor_dirs):
+        source_rows = read_csv(source_dir / "examples_index.csv")
+        if not source_rows:
+            raise SystemExit(f"No examples_index.csv found in {source_dir}")
+        summary_path = source_dir / "summary.json"
+        source_summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
+        source_numeric_features = list(source_summary.get("numeric_features", []))
+        if index == 0:
+            tensor_summary = source_summary
+            numeric_feature_names = source_numeric_features
+        elif source_numeric_features != numeric_feature_names:
+            raise SystemExit(f"Numeric feature schema mismatch in {source_dir}")
+        for row in source_rows:
+            row = dict(row)
+            row["source_tensor_dir"] = str(source_dir)
+            rows.append(row)
+        shard_files = sorted({row.get("shard_file", "") for row in source_rows if row.get("shard_file", "")})
+        shard_entries.extend((source_dir, shard_file) for shard_file in shard_files)
 
-    numeric_feature_names = list(tensor_summary.get("numeric_features", []))
     keep_indices, kept_numeric_feature_names = numeric_feature_selection(
         numeric_feature_names,
         exclude_postsim_features=bool(args.exclude_postsim_features),
@@ -310,9 +335,8 @@ def load_tensor_bundle(tensor_dir: Path, rock_embedding_npz: Path | None, args: 
     numeric_parts: list[np.ndarray] = []
     label_parts: list[np.ndarray] = []
     score_parts: list[np.ndarray] = []
-    shard_files = sorted({row.get("shard_file", "") for row in rows if row.get("shard_file", "")})
-    for shard_file in shard_files:
-        data = np.load(tensor_dir / shard_file)
+    for source_dir, shard_file in shard_entries:
+        data = np.load(source_dir / shard_file)
         maps_parts.append(np.asarray(data["maps"], dtype=np.float32))
         numeric = np.asarray(data["numeric_features"], dtype=np.float32)
         present = np.asarray(data["numeric_feature_present"], dtype=np.float32)
