@@ -852,6 +852,9 @@ def run_structured_trial_detailed(
     stone_fit_ranker_max_course: int = -1,
     state_snapshots: list[dict[str, Any]] | None = None,
     commit_best_rejected: bool = False,
+    low_release_search: bool = False,
+    release_search_step_m: float = 0.004,
+    release_extra_clearance_m: float = 0.003,
     progress_path: Path | None = None,
 ) -> dict[str, Any]:
     try:
@@ -988,6 +991,9 @@ def run_structured_trial_detailed(
                 commit_best_rejected=commit_best_rejected,
                 candidate_probe_steps=effective_candidate_probe_steps,
                 candidate_probe_hard_gate=candidate_probe_hard_gate,
+                low_release_search=low_release_search,
+                release_search_step_m=release_search_step_m,
+                release_extra_clearance_m=release_extra_clearance_m,
             )
         else:
             if slot_index >= len(order):
@@ -1020,6 +1026,9 @@ def run_structured_trial_detailed(
                     candidate_pose_top_k=slot_candidate_pose_top_k,
                     pose_risk_ranker=slot_pose_risk_ranker,
                     pose_risk_weight=slot_pose_risk_weight,
+                    low_release_search=low_release_search,
+                    release_search_step_m=release_search_step_m,
+                    release_extra_clearance_m=release_extra_clearance_m,
                 )
             else:
                 qpos_before_slot = data.qpos.copy()
@@ -1054,6 +1063,9 @@ def run_structured_trial_detailed(
                     candidate_pose_top_k=slot_candidate_pose_top_k,
                     pose_risk_ranker=slot_pose_risk_ranker,
                     pose_risk_weight=slot_pose_risk_weight,
+                    low_release_search=low_release_search,
+                    release_search_step_m=release_search_step_m,
+                    release_extra_clearance_m=release_extra_clearance_m,
                 )
                 if assignment_probe_steps > 0:
                     _probe_assignment_candidate(
@@ -1499,6 +1511,9 @@ def _place_for_target_slot(
     pose_risk_weight: float = 0.0,
     candidate_probe_steps: int = 0,
     candidate_probe_hard_gate: bool = False,
+    low_release_search: bool = False,
+    release_search_step_m: float = 0.004,
+    release_extra_clearance_m: float = 0.003,
 ) -> dict[str, Any]:
     qpos0 = data.qpos.copy()
     qvel0 = data.qvel.copy()
@@ -1523,6 +1538,17 @@ def _place_for_target_slot(
             strategy=strategy,
             target_name=target_name,
         )
+        if low_release_search and slot.course > 0:
+            candidate = _lower_candidate_release_height(
+                mujoco=mujoco,
+                model=model,
+                data=data,
+                row_by_index=row_by_index,
+                rock_index=rock_index,
+                candidate=candidate,
+                search_step_m=release_search_step_m,
+                extra_clearance_m=release_extra_clearance_m,
+            )
         ranker_prob = _candidate_ranker_prob(
             candidate_pose_ranker,
             candidate_context or {},
@@ -1671,6 +1697,9 @@ def _place_assignment_slot(
     candidate_pose_top_k: int = 0,
     pose_risk_ranker: dict[str, Any] | None = None,
     pose_risk_weight: float = 0.0,
+    low_release_search: bool = False,
+    release_search_step_m: float = 0.004,
+    release_extra_clearance_m: float = 0.003,
 ) -> tuple[int, dict[str, Any]]:
     qpos_before_slot = data.qpos.copy()
     qvel_before_slot = data.qvel.copy()
@@ -1717,6 +1746,9 @@ def _place_assignment_slot(
             pose_risk_weight=pose_risk_weight,
             candidate_probe_steps=candidate_probe_steps,
             candidate_probe_hard_gate=candidate_probe_hard_gate,
+            low_release_search=low_release_search,
+            release_search_step_m=release_search_step_m,
+            release_extra_clearance_m=release_extra_clearance_m,
         )
         selected["assignment_fallback_attempt"] = fallback_attempt_id
         selected["assignment_candidate_count"] = len(candidate_rocks)
@@ -1843,6 +1875,9 @@ def _place_literature_slot(
     commit_best_rejected: bool = False,
     candidate_probe_steps: int = 0,
     candidate_probe_hard_gate: bool = False,
+    low_release_search: bool = False,
+    release_search_step_m: float = 0.004,
+    release_extra_clearance_m: float = 0.003,
 ) -> tuple[int, dict[str, Any]]:
     qpos0 = data.qpos.copy()
     qvel0 = data.qvel.copy()
@@ -1904,6 +1939,9 @@ def _place_literature_slot(
             pose_risk_weight=pose_risk_weight,
             candidate_probe_steps=candidate_probe_steps,
             candidate_probe_hard_gate=candidate_probe_hard_gate,
+            low_release_search=low_release_search,
+            release_search_step_m=release_search_step_m,
+            release_extra_clearance_m=release_extra_clearance_m,
         )
         selected["slot_candidate_count"] = slot_candidate_count
         selected.update(pool_meta.get(rock_index, {}))
@@ -2663,6 +2701,117 @@ def _target_candidate_pose(
     else:
         quat = _random_quaternion(rng, max_tilt=max_tilt)
     return {"pos": pos, "quat": quat}
+
+
+def _lower_candidate_release_height(
+    mujoco: Any,
+    model: Any,
+    data: Any,
+    row_by_index: dict[int, dict[str, Any]],
+    rock_index: int,
+    candidate: dict[str, Any],
+    search_step_m: float,
+    extra_clearance_m: float,
+) -> dict[str, Any]:
+    """Move a candidate down to the lowest pre-contact release height.
+
+    The original pose is a bbox/support-top estimate. For angular rocks this
+    can leave unnecessary vertical fall distance. We scan downward with MuJoCo
+    contact detection and release just above the first collision.
+    """
+    original_qpos = data.qpos.copy()
+    original_qvel = data.qvel.copy()
+    adjusted = dict(candidate)
+    pos = np.asarray(candidate["pos"], dtype=float).copy()
+    quat = np.asarray(candidate["quat"], dtype=float).copy()
+    original_z = float(pos[2])
+    search_step = max(0.001, float(search_step_m))
+    extra_clearance = max(0.0, float(extra_clearance_m))
+    max_raise = 0.10
+    row = row_by_index[rock_index]
+    min_z = max(0.001, 0.10 * float(row["bbox_z"]))
+
+    checks = 0
+    high_z = original_z
+    while _candidate_pose_has_contact(mujoco, model, data, rock_index, pos, quat):
+        checks += 1
+        high_z += search_step
+        pos[2] = high_z
+        if high_z - original_z > max_raise:
+            data.qpos[:] = original_qpos
+            data.qvel[:] = original_qvel
+            mujoco.mj_forward(model, data)
+            adjusted.update(
+                {
+                    "low_release_search": 1,
+                    "low_release_failed": 1,
+                    "release_original_z": original_z,
+                    "release_z": float(pos[2]),
+                    "release_drop_reduction_m": 0.0,
+                    "release_search_checks": checks,
+                    "release_contact_z": "",
+                    "release_contact_clearance_m": "",
+                }
+            )
+            return adjusted
+
+    best_free_z = high_z
+    contact_z: float | None = None
+    test_z = high_z - search_step
+    while test_z >= min_z:
+        checks += 1
+        pos[2] = float(test_z)
+        if _candidate_pose_has_contact(mujoco, model, data, rock_index, pos, quat):
+            contact_z = float(test_z)
+            break
+        best_free_z = float(test_z)
+        test_z -= search_step
+
+    release_z = best_free_z + extra_clearance
+    pos[2] = float(release_z)
+    data.qpos[:] = original_qpos
+    data.qvel[:] = original_qvel
+    mujoco.mj_forward(model, data)
+
+    adjusted["pos"] = pos
+    adjusted.update(
+        {
+            "low_release_search": 1,
+            "low_release_failed": 0,
+            "release_original_z": original_z,
+            "release_z": float(release_z),
+            "release_drop_reduction_m": max(0.0, original_z - float(release_z)),
+            "release_search_checks": checks,
+            "release_contact_z": "" if contact_z is None else float(contact_z),
+            "release_contact_clearance_m": "" if contact_z is None else float(release_z - contact_z),
+        }
+    )
+    return adjusted
+
+
+def _candidate_pose_has_contact(
+    mujoco: Any,
+    model: Any,
+    data: Any,
+    rock_index: int,
+    pos: np.ndarray,
+    quat: np.ndarray,
+) -> bool:
+    _set_freejoint_pose(model, data, rock_index, pos, quat)
+    mujoco.mj_forward(model, data)
+    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"rock_{rock_index:03d}")
+    if body_id < 0:
+        return False
+    for contact_index in range(int(data.ncon)):
+        contact = data.contact[contact_index]
+        body1 = int(model.geom_bodyid[int(contact.geom1)])
+        body2 = int(model.geom_bodyid[int(contact.geom2)])
+        if body_id not in {body1, body2}:
+            continue
+        other_body = body2 if body1 == body_id else body1
+        if other_body != body_id:
+            return True
+    return False
 
 
 def _literature_wall_quaternion(rng: np.random.Generator, candidate_id: int, max_tilt: float) -> np.ndarray:
@@ -3697,6 +3846,14 @@ def _candidate_pose_row(
         "pose_risk_weight": float(pose_risk_weight),
         "pose_risk_penalty": float(pose_risk_penalty),
         "pose_rank_score": float(pose_rank_score),
+        "low_release_search": int(candidate.get("low_release_search", 0)),
+        "low_release_failed": int(candidate.get("low_release_failed", 0)),
+        "release_original_z": candidate.get("release_original_z", ""),
+        "release_z": candidate.get("release_z", ""),
+        "release_drop_reduction_m": candidate.get("release_drop_reduction_m", ""),
+        "release_search_checks": candidate.get("release_search_checks", ""),
+        "release_contact_z": candidate.get("release_contact_z", ""),
+        "release_contact_clearance_m": candidate.get("release_contact_clearance_m", ""),
     }
     for key, value in candidate_context.items():
         output.setdefault(key, value)

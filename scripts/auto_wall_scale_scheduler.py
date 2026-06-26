@@ -52,6 +52,7 @@ def main() -> int:
             "stage_gate": "If four-course strict success is observed, launch five-course jobs; otherwise keep improving four-course reliability.",
             "neural_policy": "Use StoneSlotNet, support-map candidate ranker, and PoseRiskNet through course 3 for four-course walls.",
             "curriculum_policy": "Strict eval keeps commit-best off; data flywheel can keep best rejected placements as curriculum and hard negatives.",
+            "action_policy": "Use low-release contact search for upper courses so execution impact is not mistaken for stone/pose failure.",
         },
         "args": json_safe(vars(args)),
         "observed": [str(path) for path in observed],
@@ -188,6 +189,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-probe-steps", type=int, default=40)
     parser.add_argument("--steps-per-rock", type=int, default=280)
     parser.add_argument("--hold-steps", type=int, default=1100)
+    parser.add_argument(
+        "--low-release-search",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use MuJoCo contact scanning to release upper-course rocks from the lowest collision-free height.",
+    )
+    parser.add_argument("--release-search-step-m", type=float, default=0.004)
+    parser.add_argument("--release-extra-clearance-m", type=float, default=0.003)
     parser.add_argument("--stone-fit-ranker-dir", type=Path, default=DEFAULT_STONE_FIT)
     parser.add_argument("--candidate-pose-ranker-dir", type=Path, default=DEFAULT_POSE_RANKER)
     parser.add_argument("--pose-risk-ranker-dir", type=Path, default=DEFAULT_POSE_RISK)
@@ -342,11 +351,21 @@ def structured_command(
         "--pose-risk-ranker-max-course",
         str(args.ranker_max_course),
     ]
+    if args.low_release_search:
+        command.extend(
+            [
+                "--low-release-search",
+                "--release-search-step-m",
+                str(args.release_search_step_m),
+                "--release-extra-clearance-m",
+                str(args.release_extra_clearance_m),
+            ]
+        )
     return command
 
 
 def flywheel_command(args: argparse.Namespace, session: str, targets: str, seed: int) -> list[str]:
-    return [
+    command = [
         str(PYTHON),
         "scripts/run_wall_data_flywheel.py",
         "--session",
@@ -397,6 +416,10 @@ def flywheel_command(args: argparse.Namespace, session: str, targets: str, seed:
         str(args.pose_risk_weight),
         "--pose-risk-ranker-max-course",
         str(args.ranker_max_course),
+        "--release-search-step-m",
+        str(args.release_search_step_m),
+        "--release-extra-clearance-m",
+        str(args.release_extra_clearance_m),
         "--collect-commit-best-rejected",
         "--dataset-target-contains",
         "single_face_wall",
@@ -441,6 +464,9 @@ def flywheel_command(args: argparse.Namespace, session: str, targets: str, seed:
         "--eval-pose-risk-ranker-dir",
         str(args.pose_risk_ranker_dir.resolve()),
     ]
+    if args.low_release_search:
+        command.append("--low-release-search")
+    return command
 
 
 def start_job(job: PlannedJob, method: str) -> dict[str, Any]:

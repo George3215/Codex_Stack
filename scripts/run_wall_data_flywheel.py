@@ -400,6 +400,16 @@ def main() -> int:
             eval_job.command.append("--candidate-probe-hard-gate")
         if args.moon_gate_strict:
             eval_job.command.append("--moon-gate-strict")
+        if args.low_release_search:
+            eval_job.command.extend(
+                [
+                    "--low-release-search",
+                    "--release-search-step-m",
+                    str(args.release_search_step_m),
+                    "--release-extra-clearance-m",
+                    str(args.release_extra_clearance_m),
+                ]
+            )
         eval_risk_dir = args.eval_pose_risk_ranker_dir.resolve() if args.eval_pose_risk_ranker_dir else None
         if eval_risk_dir and eval_risk_dir.exists():
             eval_job.command.extend(
@@ -483,6 +493,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-probe-steps", type=int, default=0)
     parser.add_argument("--candidate-probe-hard-gate", action="store_true")
     parser.add_argument("--moon-gate-strict", action="store_true")
+    parser.add_argument(
+        "--low-release-search",
+        action="store_true",
+        help="Pass-through to structured experiments: lower upper-course rocks to the lowest contact-free release height.",
+    )
+    parser.add_argument("--release-search-step-m", type=float, default=0.004)
+    parser.add_argument("--release-extra-clearance-m", type=float, default=0.003)
     parser.add_argument("--candidate-pose-top-k", type=int, default=3)
     parser.add_argument(
         "--candidate-pose-ranker-max-course",
@@ -598,6 +615,16 @@ def build_data_jobs(args: argparse.Namespace, session: str, session_dir: Path) -
                 command.append("--candidate-probe-hard-gate")
             if args.moon_gate_strict:
                 command.append("--moon-gate-strict")
+            if args.low_release_search:
+                command.extend(
+                    [
+                        "--low-release-search",
+                        "--release-search-step-m",
+                        str(args.release_search_step_m),
+                        "--release-extra-clearance-m",
+                        str(args.release_extra_clearance_m),
+                    ]
+                )
             if mode == "exploit":
                 stone_dir = args.exploit_stone_ranker_dir.resolve() if args.exploit_stone_ranker_dir else latest_dir(DEFAULT_STONE_FIT)
                 pose_dir = args.exploit_pose_ranker_dir.resolve() if args.exploit_pose_ranker_dir else latest_dir(DEFAULT_POSE_RANKER)

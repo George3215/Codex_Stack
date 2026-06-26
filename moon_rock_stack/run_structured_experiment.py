@@ -114,6 +114,9 @@ def main() -> None:
                             "stone_fit_top_k": int(args.stone_fit_top_k),
                             "stone_fit_ranker_max_course": int(args.stone_fit_ranker_max_course),
                             "commit_best_rejected": bool(args.commit_best_rejected),
+                            "low_release_search": bool(args.low_release_search),
+                            "release_search_step_m": float(args.release_search_step_m),
+                            "release_extra_clearance_m": float(args.release_extra_clearance_m),
                             "role_screening_path": str(args.role_screening.resolve()) if args.role_screening else "",
                             "mjcf_dir": mjcf_dir,
                             "output_dir": output_dir,
@@ -249,6 +252,23 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Curriculum-data mode: when no feasible literature/statics candidate exists, commit the best rejected candidate instead of skipping the slot.",
     )
+    parser.add_argument(
+        "--low-release-search",
+        action="store_true",
+        help="Before each candidate simulation, lower the rock to the lowest MuJoCo contact-free release height.",
+    )
+    parser.add_argument(
+        "--release-search-step-m",
+        type=float,
+        default=0.004,
+        help="Vertical step size for --low-release-search contact scanning.",
+    )
+    parser.add_argument(
+        "--release-extra-clearance-m",
+        type=float,
+        default=0.003,
+        help="Extra clearance added above the first contact-free release height.",
+    )
     parser.add_argument("--output", type=Path, default=Path("generated_structured"))
     return parser.parse_args()
 
@@ -306,6 +326,9 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
         stone_fit_top_k=int(task.get("stone_fit_top_k", 0)),
         stone_fit_ranker_max_course=int(task.get("stone_fit_ranker_max_course", -1)),
         commit_best_rejected=bool(task.get("commit_best_rejected", False)),
+        low_release_search=bool(task.get("low_release_search", False)),
+        release_search_step_m=float(task.get("release_search_step_m", 0.004)),
+        release_extra_clearance_m=float(task.get("release_extra_clearance_m", 0.003)),
         progress_path=Path(task["output_dir"]) / "structured_progress.csv",
     )
     state_path = (
@@ -342,6 +365,9 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
     detailed["summary"]["stone_fit_top_k_requested"] = int(task.get("stone_fit_top_k", 0))
     detailed["summary"]["stone_fit_ranker_max_course_requested"] = int(task.get("stone_fit_ranker_max_course", -1))
     detailed["summary"]["commit_best_rejected_requested"] = int(bool(task.get("commit_best_rejected", False)))
+    detailed["summary"]["low_release_search_requested"] = int(bool(task.get("low_release_search", False)))
+    detailed["summary"]["release_search_step_m_requested"] = float(task.get("release_search_step_m", 0.004))
+    detailed["summary"]["release_extra_clearance_m_requested"] = float(task.get("release_extra_clearance_m", 0.003))
     detailed["summary"]["role_screening_path"] = str(task.get("role_screening_path", ""))
     return {
         "summary": detailed["summary"],
