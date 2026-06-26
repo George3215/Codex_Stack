@@ -119,6 +119,8 @@ def main() -> None:
                             "release_extra_clearance_m": float(args.release_extra_clearance_m),
                             "base_support_prior": bool(args.base_support_prior),
                             "base_support_prior_weight": float(args.base_support_prior_weight),
+                            "base_continuity_prior": bool(args.base_continuity_prior),
+                            "base_continuity_prior_weight": float(args.base_continuity_prior_weight),
                             "role_screening_path": str(args.role_screening.resolve()) if args.role_screening else "",
                             "mjcf_dir": mjcf_dir,
                             "output_dir": output_dir,
@@ -282,6 +284,17 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="Weight for --base-support-prior in the literature/statics wall stone-pool ranking.",
     )
+    parser.add_argument(
+        "--base-continuity-prior",
+        action="store_true",
+        help="For wall base courses, penalize stones that are likely to block adjacent base slots or course-1 support windows.",
+    )
+    parser.add_argument(
+        "--base-continuity-prior-weight",
+        type=float,
+        default=1.0,
+        help="Weight for --base-continuity-prior in the literature/statics wall stone-pool ranking.",
+    )
     parser.add_argument("--output", type=Path, default=Path("generated_structured"))
     return parser.parse_args()
 
@@ -344,6 +357,8 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
         release_extra_clearance_m=float(task.get("release_extra_clearance_m", 0.003)),
         base_support_prior=bool(task.get("base_support_prior", False)),
         base_support_prior_weight=float(task.get("base_support_prior_weight", 1.0)),
+        base_continuity_prior=bool(task.get("base_continuity_prior", False)),
+        base_continuity_prior_weight=float(task.get("base_continuity_prior_weight", 1.0)),
         progress_path=Path(task["output_dir"]) / "structured_progress.csv",
     )
     state_path = (
@@ -385,6 +400,8 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
     detailed["summary"]["release_extra_clearance_m_requested"] = float(task.get("release_extra_clearance_m", 0.003))
     detailed["summary"]["base_support_prior_requested"] = int(bool(task.get("base_support_prior", False)))
     detailed["summary"]["base_support_prior_weight_requested"] = float(task.get("base_support_prior_weight", 1.0))
+    detailed["summary"]["base_continuity_prior_requested"] = int(bool(task.get("base_continuity_prior", False)))
+    detailed["summary"]["base_continuity_prior_weight_requested"] = float(task.get("base_continuity_prior_weight", 1.0))
     detailed["summary"]["role_screening_path"] = str(task.get("role_screening_path", ""))
     return {
         "summary": detailed["summary"],
@@ -752,6 +769,8 @@ def write_protocol(path: Path, args: argparse.Namespace) -> None:
         f"- release_extra_clearance_m: {args.release_extra_clearance_m}",
         f"- base_support_prior: {int(bool(args.base_support_prior))}",
         f"- base_support_prior_weight: {args.base_support_prior_weight}",
+        f"- base_continuity_prior: {int(bool(args.base_continuity_prior))}",
+        f"- base_continuity_prior_weight: {args.base_continuity_prior_weight}",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

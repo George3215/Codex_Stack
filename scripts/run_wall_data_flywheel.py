@@ -418,6 +418,14 @@ def main() -> int:
                     str(args.base_support_prior_weight),
                 ]
             )
+        if args.base_continuity_prior:
+            eval_job.command.extend(
+                [
+                    "--base-continuity-prior",
+                    "--base-continuity-prior-weight",
+                    str(args.base_continuity_prior_weight),
+                ]
+            )
         eval_risk_dir = args.eval_pose_risk_ranker_dir.resolve() if args.eval_pose_risk_ranker_dir else None
         if eval_risk_dir and eval_risk_dir.exists():
             eval_job.command.extend(
@@ -514,6 +522,12 @@ def parse_args() -> argparse.Namespace:
         help="Pass-through to structured experiments: bias the first wall course toward larger bearing stones.",
     )
     parser.add_argument("--base-support-prior-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--base-continuity-prior",
+        action="store_true",
+        help="Pass-through to structured experiments: penalize base stones that block future wall slots.",
+    )
+    parser.add_argument("--base-continuity-prior-weight", type=float, default=1.0)
     parser.add_argument("--candidate-pose-top-k", type=int, default=3)
     parser.add_argument(
         "--candidate-pose-ranker-max-course",
@@ -645,6 +659,14 @@ def build_data_jobs(args: argparse.Namespace, session: str, session_dir: Path) -
                         "--base-support-prior",
                         "--base-support-prior-weight",
                         str(args.base_support_prior_weight),
+                    ]
+                )
+            if args.base_continuity_prior:
+                command.extend(
+                    [
+                        "--base-continuity-prior",
+                        "--base-continuity-prior-weight",
+                        str(args.base_continuity_prior_weight),
                     ]
                 )
             if mode == "exploit":

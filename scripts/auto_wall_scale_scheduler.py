@@ -204,6 +204,13 @@ def parse_args() -> argparse.Namespace:
         help="Bias the first wall course toward larger support footprint/volume and better bearing-face geometry.",
     )
     parser.add_argument("--base-support-prior-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--base-continuity-prior",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Penalize base stones that are likely to block adjacent base slots or course-1 support windows.",
+    )
+    parser.add_argument("--base-continuity-prior-weight", type=float, default=0.35)
     parser.add_argument("--stone-fit-ranker-dir", type=Path, default=DEFAULT_STONE_FIT)
     parser.add_argument("--candidate-pose-ranker-dir", type=Path, default=DEFAULT_POSE_RANKER)
     parser.add_argument("--pose-risk-ranker-dir", type=Path, default=DEFAULT_POSE_RISK)
@@ -376,6 +383,14 @@ def structured_command(
                 str(args.base_support_prior_weight),
             ]
         )
+    if args.base_continuity_prior:
+        command.extend(
+            [
+                "--base-continuity-prior",
+                "--base-continuity-prior-weight",
+                str(args.base_continuity_prior_weight),
+            ]
+        )
     return command
 
 
@@ -437,6 +452,8 @@ def flywheel_command(args: argparse.Namespace, session: str, targets: str, seed:
         str(args.release_extra_clearance_m),
         "--base-support-prior-weight",
         str(args.base_support_prior_weight),
+        "--base-continuity-prior-weight",
+        str(args.base_continuity_prior_weight),
         "--collect-commit-best-rejected",
         "--dataset-target-contains",
         "single_face_wall",
@@ -485,6 +502,8 @@ def flywheel_command(args: argparse.Namespace, session: str, targets: str, seed:
         command.append("--low-release-search")
     if args.base_support_prior:
         command.append("--base-support-prior")
+    if args.base_continuity_prior:
+        command.append("--base-continuity-prior")
     return command
 
 

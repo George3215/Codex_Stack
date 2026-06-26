@@ -857,6 +857,8 @@ def run_structured_trial_detailed(
     release_extra_clearance_m: float = 0.003,
     base_support_prior: bool = False,
     base_support_prior_weight: float = 1.0,
+    base_continuity_prior: bool = False,
+    base_continuity_prior_weight: float = 1.0,
     progress_path: Path | None = None,
 ) -> dict[str, Any]:
     try:
@@ -998,6 +1000,8 @@ def run_structured_trial_detailed(
                 release_extra_clearance_m=release_extra_clearance_m,
                 base_support_prior=base_support_prior,
                 base_support_prior_weight=base_support_prior_weight,
+                base_continuity_prior=base_continuity_prior,
+                base_continuity_prior_weight=base_continuity_prior_weight,
             )
         else:
             if slot_index >= len(order):
@@ -1433,6 +1437,8 @@ def run_structured_trial_detailed(
         "commit_best_rejected": int(commit_best_rejected),
         "base_support_prior": int(bool(base_support_prior)),
         "base_support_prior_weight": float(base_support_prior_weight),
+        "base_continuity_prior": int(bool(base_continuity_prior)),
+        "base_continuity_prior_weight": float(base_continuity_prior_weight),
         "order": " ".join(f"{idx:03d}" for idx in placed),
         "xml": str(xml_path),
     }
@@ -1886,6 +1892,8 @@ def _place_literature_slot(
     release_extra_clearance_m: float = 0.003,
     base_support_prior: bool = False,
     base_support_prior_weight: float = 1.0,
+    base_continuity_prior: bool = False,
+    base_continuity_prior_weight: float = 1.0,
 ) -> tuple[int, dict[str, Any]]:
     qpos0 = data.qpos.copy()
     qvel0 = data.qvel.copy()
@@ -1902,6 +1910,8 @@ def _place_literature_slot(
         target_name=target_name,
         base_support_prior=base_support_prior,
         base_support_prior_weight=base_support_prior_weight,
+        base_continuity_prior=base_continuity_prior,
+        base_continuity_prior_weight=base_continuity_prior_weight,
     )
     if not pool:
         raise RuntimeError("No unused stones are available for literature_column placement.")
@@ -2032,6 +2042,8 @@ def _literature_stone_pool(
     target_name: str = "",
     base_support_prior: bool = False,
     base_support_prior_weight: float = 1.0,
+    base_continuity_prior: bool = False,
+    base_continuity_prior_weight: float = 1.0,
 ) -> tuple[list[int], dict[int, dict[str, Any]]]:
     if _is_wall_online_strategy(strategy):
         if candidate_count >= 5:
@@ -2048,11 +2060,22 @@ def _literature_stone_pool(
         return [], {}
     prior_enabled = bool(base_support_prior and slot.course == 0 and slot.role == "base" and _is_wall_online_strategy(strategy))
     prior_weight = max(0.0, float(base_support_prior_weight))
+    continuity_enabled = bool(prior_enabled and base_continuity_prior)
+    continuity_weight = max(0.0, float(base_continuity_prior_weight))
     hand_ranked = sorted(
         rows,
         key=lambda row: (
             _primary_sort_score(_stone_role_score(row, slot.role, strategy))
-            + (prior_weight * _base_support_prior_score(row, slot, target_name) if prior_enabled else 0.0),
+            + (
+                prior_weight * _base_support_prior_score(row, slot, target_name)
+                + (
+                    continuity_weight * _base_continuity_prior_score(row, slot, target_name)
+                    if continuity_enabled
+                    else 0.0
+                )
+                if prior_enabled
+                else 0.0
+            ),
             int(row["index"]),
         ),
     )
@@ -2068,6 +2091,13 @@ def _literature_stone_pool(
                 "base_support_prior_score": (
                     float(_base_support_prior_score(row_by_index[rock_index], slot, target_name)) if prior_enabled else 0.0
                 ),
+                "base_continuity_prior_enabled": int(continuity_enabled),
+                "base_continuity_prior_weight": float(continuity_weight if continuity_enabled else 0.0),
+                "base_continuity_prior_score": (
+                    float(_base_continuity_prior_score(row_by_index[rock_index], slot, target_name))
+                    if continuity_enabled
+                    else 0.0
+                ),
             }
             for rank, rock_index in enumerate(pool)
         }
@@ -2080,7 +2110,13 @@ def _literature_stone_pool(
         if prob is None:
             prob = 0.0
         prior_score = _base_support_prior_score(row, slot, target_name) if prior_enabled else 0.0
-        hybrid_score = (1.0 - float(prob)) + 0.035 * min(float(role_score), 10.0) + prior_weight * float(prior_score)
+        continuity_score = _base_continuity_prior_score(row, slot, target_name) if continuity_enabled else 0.0
+        hybrid_score = (
+            (1.0 - float(prob))
+            + 0.035 * min(float(role_score), 10.0)
+            + prior_weight * float(prior_score)
+            + continuity_weight * float(continuity_score)
+        )
         scored.append((hybrid_score, -float(prob), rock_index, row))
     scored.sort(key=lambda item: (item[0], item[1], item[2]))
     top_k = min(max(1, stone_fit_top_k if stone_fit_top_k > 0 else pool_size), len(scored))
@@ -2096,6 +2132,11 @@ def _literature_stone_pool(
             "base_support_prior_weight": float(prior_weight if prior_enabled else 0.0),
             "base_support_prior_score": (
                 float(_base_support_prior_score(_row, slot, target_name)) if prior_enabled else 0.0
+            ),
+            "base_continuity_prior_enabled": int(continuity_enabled),
+            "base_continuity_prior_weight": float(continuity_weight if continuity_enabled else 0.0),
+            "base_continuity_prior_score": (
+                float(_base_continuity_prior_score(_row, slot, target_name)) if continuity_enabled else 0.0
             ),
         }
     return pool, meta
@@ -2170,6 +2211,67 @@ def _base_support_prior_score(row: dict[str, Any], slot: TargetSlot, target_name
     if label.startswith("spiky_reject"):
         score += 1.50
     return float(score)
+
+
+def _base_continuity_prior_score(row: dict[str, Any], slot: TargetSlot, target_name: str) -> float:
+    if slot.course != 0 or slot.role != "base" or "wall" not in target_name:
+        return 0.0
+
+    bbox_x = float(row["bbox_x"])
+    bbox_y = float(row["bbox_y"])
+    bbox_z = float(row["bbox_z"])
+    long_span = max(bbox_x, bbox_y)
+    short_span = min(bbox_x, bbox_y)
+    footprint = 0.5 * (bbox_x + bbox_y)
+    area = bbox_x * bbox_y
+    volume = float(row["volume"])
+    elongation = float(row["elongation"])
+    flatness = float(row["flatness"])
+    compactness = float(row["compactness"])
+    source = str(row.get("source_kind", ""))
+
+    spacing, is_edge = _base_slot_spacing_and_edge(slot, target_name)
+    max_footprint = max(0.148, 1.34 * spacing)
+    max_area = max(0.0220, 1.62 * spacing * spacing)
+    max_long = max(0.170, 1.48 * spacing)
+    max_short = max(0.112, 0.98 * spacing)
+    if is_edge:
+        max_footprint += 0.010
+        max_area += 0.0030
+        max_long += 0.016
+
+    height_ratio = bbox_z / max(footprint, 1e-6)
+    score = 0.0
+    score += 7.0 * max(0.0, footprint - max_footprint)
+    score += 18.0 * max(0.0, area - max_area)
+    score += 3.8 * max(0.0, long_span - max_long)
+    score += 2.6 * max(0.0, short_span - max_short)
+    score += 0.28 * max(0.0, height_ratio - 0.95)
+    score += 0.18 * max(0.0, elongation - 1.52)
+    score += 0.14 * max(0.0, flatness - 1.42)
+    score += 80.0 * max(0.0, volume - 0.00165)
+
+    if footprint <= max_footprint and area <= max_area and long_span <= max_long:
+        score -= 0.04
+    if compactness >= 0.72 and height_ratio <= 0.90:
+        score -= 0.03
+    if source in {"buttress_clast", "bearing_block_clast"} and area > max_area:
+        score += 0.04
+    return float(score)
+
+
+def _base_slot_spacing_and_edge(slot: TargetSlot, target_name: str) -> tuple[float, bool]:
+    try:
+        base_slots = [item for item in slots_for_target(target_name) if item.course == 0 and item.role == "base"]
+    except ValueError:
+        return 0.118, False
+    xs = sorted({round(float(item.x), 6) for item in base_slots})
+    if len(xs) < 2:
+        return 0.118, False
+    gaps = [b - a for a, b in zip(xs, xs[1:]) if b > a]
+    spacing = float(np.median(gaps)) if gaps else 0.118
+    is_edge = abs(float(slot.x) - xs[0]) < 1e-6 or abs(float(slot.x) - xs[-1]) < 1e-6
+    return spacing, is_edge
 
 
 def _literature_stone_candidate_score(selected: dict[str, Any], slot: TargetSlot, strategy: str, target_name: str) -> float:
