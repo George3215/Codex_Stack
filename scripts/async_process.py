@@ -90,9 +90,12 @@ def start_job(args: argparse.Namespace) -> int:
 
 
 def status_job(args: argparse.Namespace) -> int:
-    metadata = json.loads(args.job_json.read_text(encoding="utf-8"))
-    metadata["running"] = is_pid_running(int(metadata["pid"]))
+    metadata = json.loads(args.job_json.read_text(encoding="utf-8-sig"))
+    pid = metadata.get("pid")
+    metadata["running"] = is_pid_running(int(pid)) if pid is not None else False
     metadata["status"] = "running" if metadata["running"] else "exited_or_unknown"
+    if pid is None:
+        metadata["status_note"] = "missing_pid_in_legacy_job_json"
     print(json.dumps(metadata, indent=2))
     return 0
 
@@ -100,9 +103,12 @@ def status_job(args: argparse.Namespace) -> int:
 def list_jobs(args: argparse.Namespace) -> int:
     jobs: list[dict[str, Any]] = []
     for job_json in sorted(args.job_root.resolve().glob("*/job.json")):
-        metadata = json.loads(job_json.read_text(encoding="utf-8"))
-        metadata["running"] = is_pid_running(int(metadata["pid"]))
+        metadata = json.loads(job_json.read_text(encoding="utf-8-sig"))
+        pid = metadata.get("pid")
+        metadata["running"] = is_pid_running(int(pid)) if pid is not None else False
         metadata["status"] = "running" if metadata["running"] else "exited_or_unknown"
+        if pid is None:
+            metadata["status_note"] = "missing_pid_in_legacy_job_json"
         jobs.append(metadata)
     print(json.dumps(jobs, indent=2))
     return 0

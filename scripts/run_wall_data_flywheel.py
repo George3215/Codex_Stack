@@ -110,6 +110,7 @@ def main() -> int:
     tensor_dir: Path | None = None
     stone_model_dir: Path | None = None
     pose_model_dir: Path | None = None
+    pose_risk_model_dir: Path | None = None
     critic_model_dir: Path | None = None
 
     if not args.skip_dataset:
@@ -258,6 +259,39 @@ def main() -> int:
         )
     train_jobs.extend([
         Job(
+            name="train_pose_risk_net",
+            kind="train_pose_risk",
+            output=BATCH_ROOT / f"{session}_pose_risk_net",
+            command=[
+                str(PYTHON),
+                "-m",
+                "scripts.train_torch_pose_risk_net",
+                "--dataset",
+                str(dataset_dir),
+                "--output",
+                str(BATCH_ROOT / f"{session}_pose_risk_net"),
+                *flatten_repeat_args("--target-contains", dataset_target_filters),
+                "--epochs",
+                str(args.pose_risk_epochs),
+                "--batch-size",
+                str(args.pose_risk_batch_size),
+                "--hidden",
+                str(args.pose_risk_hidden),
+                "--dropout",
+                "0.14",
+                "--lr",
+                "0.001",
+                "--weight-decay",
+                "0.0002",
+                "--test-fraction",
+                "0.2",
+                "--split-by-run",
+                "--seed",
+                str(args.seed + 104),
+            ]
+            + (["--candidate-metric-labels"] if args.pose_risk_candidate_metric_labels else []),
+        ),
+        Job(
             name="train_pose_ranker_structure",
             kind="train_pose",
             output=BATCH_ROOT / f"{session}_pose_ranker_structure",
@@ -332,6 +366,8 @@ def main() -> int:
         all_results.append(result)
         if job.kind == "train_stone":
             stone_model_dir = result.parsed_output or result.output
+        elif job.kind == "train_pose_risk":
+            pose_risk_model_dir = result.parsed_output or result.output
         elif job.kind == "train_pose":
             pose_model_dir = result.parsed_output or result.output
         elif job.kind == "train_critic":
@@ -426,7 +462,7 @@ def main() -> int:
                     str(args.base_continuity_prior_weight),
                 ]
             )
-        eval_risk_dir = args.eval_pose_risk_ranker_dir.resolve() if args.eval_pose_risk_ranker_dir else None
+        eval_risk_dir = pose_risk_model_dir or (args.eval_pose_risk_ranker_dir.resolve() if args.eval_pose_risk_ranker_dir else None)
         if eval_risk_dir and eval_risk_dir.exists():
             eval_job.command.extend(
                 [
@@ -478,6 +514,7 @@ def main() -> int:
         "tensor_dir": str(tensor_dir) if tensor_dir else "",
         "stone_model_dir": str(stone_model_dir) if stone_model_dir else "",
         "pose_model_dir": str(pose_model_dir) if pose_model_dir else "",
+        "pose_risk_model_dir": str(pose_risk_model_dir) if pose_risk_model_dir else "",
         "critic_model_dir": str(critic_model_dir) if critic_model_dir else "",
     }
     write_json(manifest_path, manifest)
@@ -570,14 +607,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--front-height-m", type=float, default=0.55)
     parser.add_argument("--shard-size", type=int, default=1000)
     parser.add_argument("--stone-epochs", type=int, default=90)
+    parser.add_argument("--pose-risk-epochs", type=int, default=90)
     parser.add_argument("--pose-epochs", type=int, default=70)
     parser.add_argument("--critic-epochs", type=int, default=80)
     parser.add_argument("--stone-batch-size", type=int, default=96)
+    parser.add_argument("--pose-risk-batch-size", type=int, default=160)
     parser.add_argument("--pose-batch-size", type=int, default=96)
     parser.add_argument("--critic-batch-size", type=int, default=128)
     parser.add_argument("--stone-hidden", type=int, default=112)
+    parser.add_argument("--pose-risk-hidden", type=int, default=144)
     parser.add_argument("--pose-hidden", type=int, default=160)
     parser.add_argument("--critic-hidden", type=int, default=160)
+    parser.add_argument(
+        "--pose-risk-candidate-metric-labels",
+        action="store_true",
+        help="Train PoseRiskNet from each candidate pose's own disturbance/velocity/error metrics.",
+    )
     parser.add_argument("--prior-run", action="append", default=[])
     parser.add_argument("--no-default-prior-runs", action="store_true")
     parser.add_argument("--dataset-target-contains", action="append", default=[])

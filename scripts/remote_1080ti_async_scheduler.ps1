@@ -5,8 +5,16 @@ param(
     [int]$Rocks = 96,
     [int]$Trials = 1,
     [int]$Candidates = 6,
+    [int]$CandidateProbeSteps = 50,
     [int]$StepsPerRock = 240,
-    [int]$HoldSteps = 900
+    [int]$HoldSteps = 900,
+    [string]$Targets = "single_face_wall_3course_v1,single_face_wall_4course_v1",
+    [string]$Gravities = "moon",
+    [string]$RockProfile = "high_wall",
+    [double]$ReleaseSearchStepM = 0.004,
+    [double]$ReleaseExtraClearanceM = 0.003,
+    [double]$BaseSupportPriorWeight = 1.0,
+    [double]$BaseContinuityPriorWeight = 0.35
 )
 
 $ErrorActionPreference = "Stop"
@@ -77,6 +85,26 @@ function Upload-RemoteWorker {
     }
 }
 
+function Download-RemoteResult {
+    $DownloadRoot = Join-Path $LocalSessionDir "downloaded_remote_run"
+    New-Item -ItemType Directory -Force -Path $DownloadRoot | Out-Null
+    $Args = @(
+        "-r",
+        "-i", $KeyPath,
+        "-o", "IdentitiesOnly=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "UserKnownHostsFile=$KnownHosts",
+        "$RemoteHost`:$RemoteRunRoot",
+        $DownloadRoot
+    )
+    & $ScpExe @Args
+    if ($LASTEXITCODE -ne 0) {
+        LogLine "scp_download_failed exit=$LASTEXITCODE"
+    } else {
+        LogLine "remote_result_downloaded local=$DownloadRoot"
+    }
+}
+
 function Write-RemoteWorker {
     $LocalWorkerPath = Join-Path $LocalSessionDir $RemoteScriptName
     $Worker = @"
@@ -118,18 +146,26 @@ try {
 
     & `$Py -m moon_rock_stack.run_structured_experiment `
         --rocks $Rocks `
-        --rock-profile high_wall `
+        --rock-profile $RockProfile `
         --clusters 10 `
         --trials $Trials `
-        --targets single_face_wall_3course_v1,single_face_wall_4course_v1 `
+        --targets $Targets `
         --strategies statics_wall `
-        --gravities moon `
+        --gravities $Gravities `
         --candidates $Candidates `
         --steps-per-rock $StepsPerRock `
         --hold-steps $HoldSteps `
+        --candidate-probe-steps $CandidateProbeSteps `
         --workers 1 `
         --seed 306220108 `
-        --output `$OutDir
+        --output `$OutDir `
+        --low-release-search `
+        --release-search-step-m $ReleaseSearchStepM `
+        --release-extra-clearance-m $ReleaseExtraClearanceM `
+        --base-support-prior `
+        --base-support-prior-weight $BaseSupportPriorWeight `
+        --base-continuity-prior `
+        --base-continuity-prior-weight $BaseContinuityPriorWeight
     `$ExitCode = `$LASTEXITCODE
     & nvidia-smi --query-gpu=name,memory.total,memory.used,utilization.gpu --format=csv | Tee-Object -FilePath "`$RunRoot/gpu_after.csv"
     "`$ExitCode" | Set-Content -LiteralPath "`$RunRoot/exit_code.txt" -Encoding UTF8
@@ -184,6 +220,7 @@ for ($Cycle = 0; $Cycle -lt $Cycles; $Cycle++) {
     $RemoteFinished = Invoke-Remote -Command "powershell -NoProfile -Command `"if (Test-Path '$RemoteRunRoot/finished_at.txt') { Get-Content '$RemoteRunRoot/finished_at.txt'; if (Test-Path '$RemoteRunRoot/exit_code.txt') { Get-Content '$RemoteRunRoot/exit_code.txt' } } else { 'not_finished' }`"" -TimeoutSeconds 60
     LogLine "remote_finish_status stdout=$($RemoteFinished.Stdout.Trim()) stderr=$($RemoteFinished.Stderr.Trim())"
     if ($RemoteFinished.Stdout -notmatch "not_finished" -and $RemoteFinished.Stdout.Trim()) {
+        Download-RemoteResult
         break
     }
 
