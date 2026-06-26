@@ -117,6 +117,8 @@ def main() -> None:
                             "low_release_search": bool(args.low_release_search),
                             "release_search_step_m": float(args.release_search_step_m),
                             "release_extra_clearance_m": float(args.release_extra_clearance_m),
+                            "base_support_prior": bool(args.base_support_prior),
+                            "base_support_prior_weight": float(args.base_support_prior_weight),
                             "role_screening_path": str(args.role_screening.resolve()) if args.role_screening else "",
                             "mjcf_dir": mjcf_dir,
                             "output_dir": output_dir,
@@ -269,6 +271,17 @@ def parse_args() -> argparse.Namespace:
         default=0.003,
         help="Extra clearance added above the first contact-free release height.",
     )
+    parser.add_argument(
+        "--base-support-prior",
+        action="store_true",
+        help="For wall base courses, bias stone selection toward larger footprint/volume and better support-face geometry.",
+    )
+    parser.add_argument(
+        "--base-support-prior-weight",
+        type=float,
+        default=1.0,
+        help="Weight for --base-support-prior in the literature/statics wall stone-pool ranking.",
+    )
     parser.add_argument("--output", type=Path, default=Path("generated_structured"))
     return parser.parse_args()
 
@@ -329,6 +342,8 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
         low_release_search=bool(task.get("low_release_search", False)),
         release_search_step_m=float(task.get("release_search_step_m", 0.004)),
         release_extra_clearance_m=float(task.get("release_extra_clearance_m", 0.003)),
+        base_support_prior=bool(task.get("base_support_prior", False)),
+        base_support_prior_weight=float(task.get("base_support_prior_weight", 1.0)),
         progress_path=Path(task["output_dir"]) / "structured_progress.csv",
     )
     state_path = (
@@ -368,6 +383,8 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
     detailed["summary"]["low_release_search_requested"] = int(bool(task.get("low_release_search", False)))
     detailed["summary"]["release_search_step_m_requested"] = float(task.get("release_search_step_m", 0.004))
     detailed["summary"]["release_extra_clearance_m_requested"] = float(task.get("release_extra_clearance_m", 0.003))
+    detailed["summary"]["base_support_prior_requested"] = int(bool(task.get("base_support_prior", False)))
+    detailed["summary"]["base_support_prior_weight_requested"] = float(task.get("base_support_prior_weight", 1.0))
     detailed["summary"]["role_screening_path"] = str(task.get("role_screening_path", ""))
     return {
         "summary": detailed["summary"],
@@ -730,6 +747,11 @@ def write_protocol(path: Path, args: argparse.Namespace) -> None:
         f"- stone_fit_ranker_dir: {args.stone_fit_ranker_dir or ''}",
         f"- stone_fit_top_k: {args.stone_fit_top_k}",
         f"- stone_fit_ranker_max_course: {args.stone_fit_ranker_max_course}",
+        f"- low_release_search: {int(bool(args.low_release_search))}",
+        f"- release_search_step_m: {args.release_search_step_m}",
+        f"- release_extra_clearance_m: {args.release_extra_clearance_m}",
+        f"- base_support_prior: {int(bool(args.base_support_prior))}",
+        f"- base_support_prior_weight: {args.base_support_prior_weight}",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

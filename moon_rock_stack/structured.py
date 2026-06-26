@@ -855,6 +855,8 @@ def run_structured_trial_detailed(
     low_release_search: bool = False,
     release_search_step_m: float = 0.004,
     release_extra_clearance_m: float = 0.003,
+    base_support_prior: bool = False,
+    base_support_prior_weight: float = 1.0,
     progress_path: Path | None = None,
 ) -> dict[str, Any]:
     try:
@@ -994,6 +996,8 @@ def run_structured_trial_detailed(
                 low_release_search=low_release_search,
                 release_search_step_m=release_search_step_m,
                 release_extra_clearance_m=release_extra_clearance_m,
+                base_support_prior=base_support_prior,
+                base_support_prior_weight=base_support_prior_weight,
             )
         else:
             if slot_index >= len(order):
@@ -1427,6 +1431,8 @@ def run_structured_trial_detailed(
         "stone_fit_top_k": int(stone_fit_top_k),
         "stone_fit_ranker_max_course": int(stone_fit_ranker_max_course),
         "commit_best_rejected": int(commit_best_rejected),
+        "base_support_prior": int(bool(base_support_prior)),
+        "base_support_prior_weight": float(base_support_prior_weight),
         "order": " ".join(f"{idx:03d}" for idx in placed),
         "xml": str(xml_path),
     }
@@ -1878,6 +1884,8 @@ def _place_literature_slot(
     low_release_search: bool = False,
     release_search_step_m: float = 0.004,
     release_extra_clearance_m: float = 0.003,
+    base_support_prior: bool = False,
+    base_support_prior_weight: float = 1.0,
 ) -> tuple[int, dict[str, Any]]:
     qpos0 = data.qpos.copy()
     qvel0 = data.qvel.copy()
@@ -1891,6 +1899,9 @@ def _place_literature_slot(
         candidate_context=candidate_context,
         stone_fit_ranker=stone_fit_ranker,
         stone_fit_top_k=stone_fit_top_k,
+        target_name=target_name,
+        base_support_prior=base_support_prior,
+        base_support_prior_weight=base_support_prior_weight,
     )
     if not pool:
         raise RuntimeError("No unused stones are available for literature_column placement.")
@@ -2018,6 +2029,9 @@ def _literature_stone_pool(
     candidate_context: dict[str, Any] | None = None,
     stone_fit_ranker: dict[str, Any] | None = None,
     stone_fit_top_k: int = 0,
+    target_name: str = "",
+    base_support_prior: bool = False,
+    base_support_prior_weight: float = 1.0,
 ) -> tuple[list[int], dict[int, dict[str, Any]]]:
     if _is_wall_online_strategy(strategy):
         if candidate_count >= 5:
@@ -2032,7 +2046,16 @@ def _literature_stone_pool(
     rows = [row for idx, row in row_by_index.items() if idx not in used]
     if not rows:
         return [], {}
-    hand_ranked = sorted(rows, key=lambda row: _stone_role_score(row, slot.role, strategy))
+    prior_enabled = bool(base_support_prior and slot.course == 0 and slot.role == "base" and _is_wall_online_strategy(strategy))
+    prior_weight = max(0.0, float(base_support_prior_weight))
+    hand_ranked = sorted(
+        rows,
+        key=lambda row: (
+            _primary_sort_score(_stone_role_score(row, slot.role, strategy))
+            + (prior_weight * _base_support_prior_score(row, slot, target_name) if prior_enabled else 0.0),
+            int(row["index"]),
+        ),
+    )
     if stone_fit_ranker is None:
         pool = [int(row["index"]) for row in hand_ranked[:pool_size]]
         return pool, {
@@ -2040,6 +2063,11 @@ def _literature_stone_pool(
                 "stone_fit_prob": "",
                 "stone_fit_rank": rank,
                 "stone_fit_top_k": 0,
+                "base_support_prior_enabled": int(prior_enabled),
+                "base_support_prior_weight": float(prior_weight if prior_enabled else 0.0),
+                "base_support_prior_score": (
+                    float(_base_support_prior_score(row_by_index[rock_index], slot, target_name)) if prior_enabled else 0.0
+                ),
             }
             for rank, rock_index in enumerate(pool)
         }
@@ -2051,7 +2079,8 @@ def _literature_stone_pool(
         role_score = _primary_sort_score(_stone_role_score(row, slot.role, strategy))
         if prob is None:
             prob = 0.0
-        hybrid_score = (1.0 - float(prob)) + 0.035 * min(float(role_score), 10.0)
+        prior_score = _base_support_prior_score(row, slot, target_name) if prior_enabled else 0.0
+        hybrid_score = (1.0 - float(prob)) + 0.035 * min(float(role_score), 10.0) + prior_weight * float(prior_score)
         scored.append((hybrid_score, -float(prob), rock_index, row))
     scored.sort(key=lambda item: (item[0], item[1], item[2]))
     top_k = min(max(1, stone_fit_top_k if stone_fit_top_k > 0 else pool_size), len(scored))
@@ -2063,6 +2092,11 @@ def _literature_stone_pool(
             "stone_fit_rank": rank,
             "stone_fit_hybrid_score": float(hybrid_score),
             "stone_fit_top_k": top_k,
+            "base_support_prior_enabled": int(prior_enabled),
+            "base_support_prior_weight": float(prior_weight if prior_enabled else 0.0),
+            "base_support_prior_score": (
+                float(_base_support_prior_score(_row, slot, target_name)) if prior_enabled else 0.0
+            ),
         }
     return pool, meta
 
@@ -2071,6 +2105,71 @@ def _primary_sort_score(value: Any) -> float:
     if isinstance(value, (tuple, list)):
         return float(value[0]) if value else 0.0
     return float(value)
+
+
+def _base_support_prior_score(row: dict[str, Any], slot: TargetSlot, target_name: str) -> float:
+    if slot.course != 0 or slot.role != "base":
+        return 0.0
+
+    bbox_x = float(row["bbox_x"])
+    bbox_y = float(row["bbox_y"])
+    bbox_z = float(row["bbox_z"])
+    footprint = 0.5 * (bbox_x + bbox_y)
+    footprint_area = bbox_x * bbox_y
+    min_span = min(bbox_x, bbox_y)
+    volume = float(row["volume"])
+    compactness = float(row["compactness"])
+    elongation = float(row["elongation"])
+    flatness = float(row["flatness"])
+    spike = float(row.get("spike_score", 0.0))
+    support_count = float(row.get("support_face_count", 0.0))
+    support_ratio = float(row.get("support_face_area_ratio", 0.0))
+    opposing_ratio = float(row.get("opposing_face_area_ratio", 0.0))
+    source = str(row.get("source_kind", ""))
+    label = str(row.get("cluster_label", ""))
+
+    if target_name == "single_face_wall_4course_v1":
+        min_footprint = 0.132
+        min_area = 0.0165
+        min_volume = 0.00088
+        min_span_target = 0.092
+    elif "wall" in target_name:
+        min_footprint = 0.128
+        min_area = 0.0155
+        min_volume = 0.00082
+        min_span_target = 0.088
+    else:
+        min_footprint = 0.118
+        min_area = 0.0135
+        min_volume = 0.00072
+        min_span_target = 0.082
+
+    height_ratio = bbox_z / max(footprint, 1e-6)
+    score = 0.0
+    score += 8.0 * max(0.0, min_footprint - footprint)
+    score += 22.0 * max(0.0, min_area - footprint_area)
+    score += 420.0 * max(0.0, min_volume - volume)
+    score += 4.5 * max(0.0, min_span_target - min_span)
+    score += 0.30 * max(0.0, height_ratio - 1.00)
+    score += 0.22 * max(0.0, elongation - 1.45)
+    score += 0.18 * max(0.0, flatness - 1.38)
+    score += 2.8 * spike
+
+    score -= 2.2 * min(max(0.0, footprint - min_footprint), 0.045)
+    score -= 12.0 * min(max(0.0, footprint_area - min_area), 0.010)
+    score -= 180.0 * min(max(0.0, volume - min_volume), 0.00065)
+    score -= 0.10 * min(max(0.0, compactness - 0.60), 0.40)
+    score -= 0.14 * min(max(0.0, support_ratio - 0.18), 0.22)
+    score -= 0.04 * min(max(0.0, support_count - 1.0), 3.0)
+    score -= 0.08 * min(max(0.0, opposing_ratio - 0.15), 0.30)
+
+    if source in {"bearing_block_clast", "wall_block_clast", "buttress_clast", "subangular_block", "wedge_clast"}:
+        score -= 0.07
+    if source in {"chock_clast", "cap_block_clast", "tie_bridge_clast"}:
+        score += 0.10
+    if label.startswith("spiky_reject"):
+        score += 1.50
+    return float(score)
 
 
 def _literature_stone_candidate_score(selected: dict[str, Any], slot: TargetSlot, strategy: str, target_name: str) -> float:

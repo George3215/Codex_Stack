@@ -197,6 +197,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--release-search-step-m", type=float, default=0.004)
     parser.add_argument("--release-extra-clearance-m", type=float, default=0.003)
+    parser.add_argument(
+        "--base-support-prior",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Bias the first wall course toward larger support footprint/volume and better bearing-face geometry.",
+    )
+    parser.add_argument("--base-support-prior-weight", type=float, default=1.0)
     parser.add_argument("--stone-fit-ranker-dir", type=Path, default=DEFAULT_STONE_FIT)
     parser.add_argument("--candidate-pose-ranker-dir", type=Path, default=DEFAULT_POSE_RANKER)
     parser.add_argument("--pose-risk-ranker-dir", type=Path, default=DEFAULT_POSE_RISK)
@@ -361,6 +368,14 @@ def structured_command(
                 str(args.release_extra_clearance_m),
             ]
         )
+    if args.base_support_prior:
+        command.extend(
+            [
+                "--base-support-prior",
+                "--base-support-prior-weight",
+                str(args.base_support_prior_weight),
+            ]
+        )
     return command
 
 
@@ -420,6 +435,8 @@ def flywheel_command(args: argparse.Namespace, session: str, targets: str, seed:
         str(args.release_search_step_m),
         "--release-extra-clearance-m",
         str(args.release_extra_clearance_m),
+        "--base-support-prior-weight",
+        str(args.base_support_prior_weight),
         "--collect-commit-best-rejected",
         "--dataset-target-contains",
         "single_face_wall",
@@ -466,6 +483,8 @@ def flywheel_command(args: argparse.Namespace, session: str, targets: str, seed:
     ]
     if args.low_release_search:
         command.append("--low-release-search")
+    if args.base_support_prior:
+        command.append("--base-support-prior")
     return command
 
 

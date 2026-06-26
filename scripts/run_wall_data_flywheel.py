@@ -410,6 +410,14 @@ def main() -> int:
                     str(args.release_extra_clearance_m),
                 ]
             )
+        if args.base_support_prior:
+            eval_job.command.extend(
+                [
+                    "--base-support-prior",
+                    "--base-support-prior-weight",
+                    str(args.base_support_prior_weight),
+                ]
+            )
         eval_risk_dir = args.eval_pose_risk_ranker_dir.resolve() if args.eval_pose_risk_ranker_dir else None
         if eval_risk_dir and eval_risk_dir.exists():
             eval_job.command.extend(
@@ -500,6 +508,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--release-search-step-m", type=float, default=0.004)
     parser.add_argument("--release-extra-clearance-m", type=float, default=0.003)
+    parser.add_argument(
+        "--base-support-prior",
+        action="store_true",
+        help="Pass-through to structured experiments: bias the first wall course toward larger bearing stones.",
+    )
+    parser.add_argument("--base-support-prior-weight", type=float, default=1.0)
     parser.add_argument("--candidate-pose-top-k", type=int, default=3)
     parser.add_argument(
         "--candidate-pose-ranker-max-course",
@@ -623,6 +637,14 @@ def build_data_jobs(args: argparse.Namespace, session: str, session_dir: Path) -
                         str(args.release_search_step_m),
                         "--release-extra-clearance-m",
                         str(args.release_extra_clearance_m),
+                    ]
+                )
+            if args.base_support_prior:
+                command.extend(
+                    [
+                        "--base-support-prior",
+                        "--base-support-prior-weight",
+                        str(args.base_support_prior_weight),
                     ]
                 )
             if mode == "exploit":
