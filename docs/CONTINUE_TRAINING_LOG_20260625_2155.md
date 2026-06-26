@@ -314,3 +314,71 @@ release scan 统计：
 2. 后续训练应提高 course 2-3 的槽位覆盖权重，特别是对 `no_feasible_pose` 的 hard negative 建模。
 3. 神经网络目标应从“单块候选评分”进一步转为“局部连续支撑窗口评分”：不仅判断某个石头能不能放，还要判断放完后是否给下一层留下可用支撑。
 4. 对 cap 层增加候选生成宽度和局部重排策略；否则会出现当前这种“下部墙体已成形，但顶层没有连续可行位姿”的 near-success。
+
+## 2026-06-26 12:05 补充：low-release master c03 strict 4 层评估
+
+新 low-release master 已自动启动并完成第一轮 strict 4course 评估：
+
+- job: `batch_runs/async_jobs/20260626_101754_20260626_low_release_wall_master_v1_c03_strict_4course_eval`
+- output: `batch_runs/20260626_low_release_wall_master_v1_c03_strict_4course`
+- models:
+  - StoneSlotNet: `batch_runs/20260622_autonomous_wall_flywheel_master_v2_c24_flywheel_3to4_stone_slot_net`
+  - SupportMap: `batch_runs/20260622_autonomous_wall_flywheel_master_v2_c24_flywheel_3to4_pose_ranker_structure`
+  - PoseRisk: `batch_runs/20260622_poserisk_v18b_recent_3to4_train`
+- low_release_search_requested: `1`
+- trials: `2`
+- success / shape_success: `0 / 0`
+- mean_visible_courses: `4.0`
+- mean_stable_count: `16.0`
+- mean_failure_count: `4.0`
+- mean_stack_height: `0.3350 m`
+- mean_target_rmse: `0.1489 m`
+- mean_max_drift: `0.4979 m`
+
+trial 级结果：
+
+| trial | rock_count | stable | failure | skipped | visible | height | rmse | drift | y_span | outliers | velocity |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 19 | 17 | 2 | 5 | 4 | 0.3155 | 0.1266 | 0.4661 | 0.4997 | 2 | 0.1086 |
+| 1 | 21 | 15 | 6 | 3 | 4 | 0.3545 | 0.1711 | 0.5297 | 0.7341 | 6 | 0.3795 |
+
+解释：
+
+- trial0 是“较高稳定数量但横向漂移过大”的失败，wall_front RGB 仍能看出墙形。
+- trial1 是“放得上去但 final hold 退化”的失败，一度放到 `21` 块，但最终只有 `15` 块稳定，说明动作执行和低释放已经能把石头放到高层，下一步瓶颈变成整体结构连锁稳定性。
+- c03 strict 与 c24 old-release 相比，4 层可见率和稳定块数都明显提高，但 shape 判据仍失败，说明单纯低释放不是终点，必须引入高层连续支撑和 final-hold 稳定性损失。
+
+release scan 统计：
+
+| course | candidates | mean drop reduction | max drop reduction | >1cm | >3cm |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 1344 | 0.00718 m | 0.037 m | 463 | 14 |
+| 2 | 1344 | 0.01235 m | 0.101 m | 566 | 168 |
+| 3 | 1120 | 0.01854 m | 0.113 m | 741 | 219 |
+
+这次与 full probe 不同，course 3 的低释放修正非常明显，最大降高 `11.3 cm`，说明旧释放高度在 cap 层可能严重夸大冲击。
+
+跳槽分布：
+
+| trial | course 0 skipped | course 1 skipped | course 2 skipped | course 3 skipped |
+|---:|---:|---:|---:|---:|
+| 0 | 0 | 1 | 0 | 4 |
+| 1 | 0 | 0 | 0 | 3 |
+
+这说明 c03 的中层覆盖已经比 full probe 更好，主要缺口集中在 cap 层。下一轮数据飞轮应重点学习 cap 层候选生成和 final-hold 后稳定性，而不是继续只优化 base/middle。
+
+图像记录：
+
+- capture root: `batch_runs/20260626_low_release_wall_master_v1_c03_strict_4course/captures_960x720_low_release_c03_strict_20260626`
+- trial1 case: `00_single_face_wall_4course_v1_failure_statics_wall_moon_trial_01`
+- trial0 case: `01_single_face_wall_4course_v1_failure_statics_wall_moon_trial_00`
+- 推荐展示：
+  - trial0 `wall_front_rgb.png`：最像完整墙，但横向漂移。
+  - trial1 `wall_front_rgb.png` + `wall_top_depth.png`：展示“高层可放置，但 final hold 散开”的典型失败。
+
+调度状态：
+
+- c03 strict 结束后，调度器已自动启动 c03 low-release flywheel：
+  - job: `batch_runs/async_jobs/20260626_115549_20260626_low_release_wall_master_v1_c03_flywheel_3to4_data_train`
+  - session/output root: `batch_runs/20260626_low_release_wall_master_v1_c03_flywheel_3to4`
+- flywheel 命令已确认包含 `--low-release-search`，后续采样、训练、闭环 eval 都会进入低释放数据分布。
