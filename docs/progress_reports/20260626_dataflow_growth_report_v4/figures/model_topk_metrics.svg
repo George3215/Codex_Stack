@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="610" viewBox="0 0 1100 610">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="550.0" y="28.0" font-size="18" font-family="Arial, sans-serif" font-weight="700" fill="#111827" text-anchor="middle">Model ranking metrics</text>
+<rect x="76" y="54" width="804" height="406" fill="#f9fafb" stroke="#d1d5db"/>
+<line x1="76" y1="460.0" x2="880" y2="460.0" stroke="#e5e7eb"/>
+<text x="66.0" y="464.0" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.00</text>
+<line x1="76" y1="378.8" x2="880" y2="378.8" stroke="#e5e7eb"/>
+<text x="66.0" y="382.8" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.20</text>
+<line x1="76" y1="297.6" x2="880" y2="297.6" stroke="#e5e7eb"/>
+<text x="66.0" y="301.6" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.40</text>
+<line x1="76" y1="216.4" x2="880" y2="216.4" stroke="#e5e7eb"/>
+<text x="66.0" y="220.4" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.60</text>
+<line x1="76" y1="135.2" x2="880" y2="135.2" stroke="#e5e7eb"/>
+<text x="66.0" y="139.2" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.80</text>
+<line x1="76" y1="54.0" x2="880" y2="54.0" stroke="#e5e7eb"/>
+<text x="66.0" y="58.0" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">1.00</text>
+<text x="20" y="257.0" font-size="12" fill="#374151" text-anchor="middle" transform="rotate(-90 20,257.0)">value</text>
+<line x1="76" y1="460.0" x2="880" y2="460.0" stroke="#111827" stroke-width="1"/>
+<rect x="82.2" y="344.0" width="20.7" height="116.0" fill="#7c3aed"/>
+<rect x="139.6" y="327.8" width="20.7" height="132.2" fill="#7c3aed"/>
+<rect x="197.0" y="420.4" width="20.7" height="39.6" fill="#7c3aed"/>
+<rect x="254.5" y="349.3" width="20.7" height="110.7" fill="#7c3aed"/>
+<rect x="311.9" y="302.8" width="20.7" height="157.2" fill="#7c3aed"/>
+<rect x="369.3" y="304.8" width="20.7" height="155.2" fill="#7c3aed"/>
+<rect x="426.8" y="417.3" width="20.7" height="42.7" fill="#7c3aed"/>
+<rect x="484.2" y="436.6" width="20.7" height="23.4" fill="#7c3aed"/>
+<rect x="541.6" y="426.2" width="20.7" height="33.8" fill="#7c3aed"/>
+<rect x="599.0" y="304.8" width="20.7" height="155.2" fill="#7c3aed"/>
+<rect x="656.5" y="397.7" width="20.7" height="62.3" fill="#7c3aed"/>
+<rect x="713.9" y="198.5" width="20.7" height="261.5" fill="#7c3aed"/>
+<rect x="771.3" y="418.1" width="20.7" height="41.9" fill="#7c3aed"/>
+<rect x="828.8" y="206.2" width="20.7" height="253.8" fill="#7c3aed"/>
+<rect x="106.6" y="315.0" width="20.7" height="145.0" fill="#0891b2"/>
+<rect x="164.0" y="290.0" width="20.7" height="170.0" fill="#0891b2"/>
+<rect x="221.4" y="321.4" width="20.7" height="138.6" fill="#0891b2"/>
+<rect x="278.9" y="293.9" width="20.7" height="166.1" fill="#0891b2"/>
+<rect x="336.3" y="237.4" width="20.7" height="222.6" fill="#0891b2"/>
+<rect x="393.7" y="233.1" width="20.7" height="226.9" fill="#0891b2"/>
+<rect x="451.1" y="342.5" width="20.7" height="117.5" fill="#0891b2"/>
+<rect x="508.6" y="358.5" width="20.7" height="101.5" fill="#0891b2"/>
+<rect x="566.0" y="347.2" width="20.7" height="112.8" fill="#0891b2"/>
+<rect x="623.4" y="233.1" width="20.7" height="226.9" fill="#0891b2"/>
+<rect x="680.9" y="303.3" width="20.7" height="156.7" fill="#0891b2"/>
+<rect x="738.3" y="83.8" width="20.7" height="376.2" fill="#0891b2"/>
+<rect x="795.7" y="344.9" width="20.7" height="115.1" fill="#0891b2"/>
+<rect x="853.1" y="98.8" width="20.7" height="361.2" fill="#0891b2"/>
+<text x="104.7" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 104.7,498)">autonomous_wall_flywheel_master_v2</text>
+<text x="162.1" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 162.1,498)">autonomous_wall_flywheel_master_v2</text>
+<text x="219.6" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 219.6,498)">autonomous_wall_flywheel_master_v2</text>
+<text x="277.0" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 277.0,498)">autonomous_wall_flywheel_master_v2</text>
+<text x="334.4" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 334.4,498)">autonomous_wall_flywheel_master_v2</text>
+<text x="391.9" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 391.9,498)">autonomous_wall_flywheel_master_v2</text>
+<text x="449.3" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 449.3,498)">autonomous_wall_flywheel_master_v2</text>
+<text x="506.7" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 506.7,498)">autonomous_wall_flywheel_master_v2</text>
+<text x="564.1" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 564.1,498)">low_release_wall_master_v1_c03_sto</text>
+<text x="621.6" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 621.6,498)">low_release_wall_master_v1_c04_sto</text>
+<text x="679.0" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 679.0,498)">policy_replacement_stone_slot_net_</text>
+<text x="736.4" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 736.4,498)">policy_replacement_pose_risk_net_v</text>
+<text x="793.9" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 793.9,498)">clean_wall34_stone_slot_net_v1/sto</text>
+<text x="851.3" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 851.3,498)">clean_wall34_pose_risk_net_v1/pose</text>
+<rect x="908" y="66" width="14" height="14" fill="#7c3aed"/>
+<text x="930.0" y="77.0" font-size="12" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="start">top1/F1</text>
+<rect x="908" y="90" width="14" height="14" fill="#0891b2"/>
+<text x="930.0" y="101.0" font-size="12" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="start">top3/precision</text>
+</svg>

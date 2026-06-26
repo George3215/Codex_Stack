@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="610" viewBox="0 0 1100 610">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="550.0" y="28.0" font-size="18" font-family="Arial, sans-serif" font-weight="700" fill="#111827" text-anchor="middle">Criterion enabled-minus-disabled deltas</text>
+<rect x="76" y="54" width="804" height="406" fill="#f9fafb" stroke="#d1d5db"/>
+<line x1="76" y1="460.0" x2="880" y2="460.0" stroke="#e5e7eb"/>
+<text x="66.0" y="464.0" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">-0.20</text>
+<line x1="76" y1="378.8" x2="880" y2="378.8" stroke="#e5e7eb"/>
+<text x="66.0" y="382.8" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">-0.11</text>
+<line x1="76" y1="297.6" x2="880" y2="297.6" stroke="#e5e7eb"/>
+<text x="66.0" y="301.6" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">-0.01</text>
+<line x1="76" y1="216.4" x2="880" y2="216.4" stroke="#e5e7eb"/>
+<text x="66.0" y="220.4" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.08</text>
+<line x1="76" y1="135.2" x2="880" y2="135.2" stroke="#e5e7eb"/>
+<text x="66.0" y="139.2" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.18</text>
+<line x1="76" y1="54.0" x2="880" y2="54.0" stroke="#e5e7eb"/>
+<text x="66.0" y="58.0" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.27</text>
+<text x="20" y="257.0" font-size="12" fill="#374151" text-anchor="middle" transform="rotate(-90 20,257.0)">value</text>
+<line x1="76" y1="285.9" x2="880" y2="285.9" stroke="#111827" stroke-width="1"/>
+<rect x="100.1" y="285.9" width="24.0" height="131.5" fill="#dc2626"/>
+<rect x="200.6" y="285.9" width="24.0" height="122.8" fill="#dc2626"/>
+<rect x="301.1" y="285.9" width="24.0" height="91.1" fill="#dc2626"/>
+<rect x="401.6" y="218.6" width="24.0" height="67.2" fill="#dc2626"/>
+<rect x="502.1" y="228.8" width="24.0" height="57.1" fill="#dc2626"/>
+<rect x="602.6" y="243.7" width="24.0" height="42.2" fill="#dc2626"/>
+<rect x="703.1" y="285.9" width="24.0" height="0.0" fill="#dc2626"/>
+<rect x="803.6" y="285.9" width="24.0" height="0.0" fill="#dc2626"/>
+<rect x="128.4" y="261.5" width="24.0" height="24.4" fill="#0d9488"/>
+<rect x="228.9" y="279.2" width="24.0" height="6.6" fill="#0d9488"/>
+<rect x="329.4" y="157.6" width="24.0" height="128.3" fill="#0d9488"/>
+<rect x="429.9" y="285.9" width="24.0" height="34.6" fill="#0d9488"/>
+<rect x="530.4" y="96.6" width="24.0" height="189.3" fill="#0d9488"/>
+<rect x="630.9" y="241.1" width="24.0" height="44.8" fill="#0d9488"/>
+<rect x="731.4" y="285.9" width="24.0" height="20.4" fill="#0d9488"/>
+<rect x="831.9" y="285.9" width="24.0" height="27.2" fill="#0d9488"/>
+<text x="126.2" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 126.2,498)">candidate hard gate</text>
+<text x="226.8" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 226.8,498)">low release search</text>
+<text x="327.2" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 327.2,498)">moon strict gate</text>
+<text x="427.8" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 427.8,498)">StoneSlotNet</text>
+<text x="528.2" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 528.2,498)">PoseRiskNet</text>
+<text x="628.8" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 628.8,498)">SupportMap / pose ranker</text>
+<text x="729.2" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 729.2,498)">base continuity prior</text>
+<text x="829.8" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 829.8,498)">base support prior</text>
+<rect x="908" y="66" width="14" height="14" fill="#dc2626"/>
+<text x="930.0" y="77.0" font-size="12" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="start">strict delta</text>
+<rect x="908" y="90" width="14" height="14" fill="#0d9488"/>
+<text x="930.0" y="101.0" font-size="12" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="start">stable delta</text>
+</svg>
