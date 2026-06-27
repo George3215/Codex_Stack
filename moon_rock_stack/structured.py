@@ -859,6 +859,7 @@ def run_structured_trial_detailed(
     base_support_prior_weight: float = 1.0,
     base_continuity_prior: bool = False,
     base_continuity_prior_weight: float = 1.0,
+    experience_priors: dict[str, Any] | None = None,
     progress_path: Path | None = None,
 ) -> dict[str, Any]:
     try:
@@ -1002,6 +1003,7 @@ def run_structured_trial_detailed(
                 base_support_prior_weight=base_support_prior_weight,
                 base_continuity_prior=base_continuity_prior,
                 base_continuity_prior_weight=base_continuity_prior_weight,
+                experience_priors=experience_priors,
             )
         else:
             if slot_index >= len(order):
@@ -1439,6 +1441,7 @@ def run_structured_trial_detailed(
         "base_support_prior_weight": float(base_support_prior_weight),
         "base_continuity_prior": int(bool(base_continuity_prior)),
         "base_continuity_prior_weight": float(base_continuity_prior_weight),
+        "experience_prior": int(bool(experience_priors)),
         "order": " ".join(f"{idx:03d}" for idx in placed),
         "xml": str(xml_path),
     }
@@ -1894,6 +1897,7 @@ def _place_literature_slot(
     base_support_prior_weight: float = 1.0,
     base_continuity_prior: bool = False,
     base_continuity_prior_weight: float = 1.0,
+    experience_priors: dict[str, Any] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     qpos0 = data.qpos.copy()
     qvel0 = data.qvel.copy()
@@ -1912,6 +1916,7 @@ def _place_literature_slot(
         base_support_prior_weight=base_support_prior_weight,
         base_continuity_prior=base_continuity_prior,
         base_continuity_prior_weight=base_continuity_prior_weight,
+        experience_priors=experience_priors,
     )
     if not pool:
         raise RuntimeError("No unused stones are available for literature_column placement.")
@@ -2044,7 +2049,9 @@ def _literature_stone_pool(
     base_support_prior_weight: float = 1.0,
     base_continuity_prior: bool = False,
     base_continuity_prior_weight: float = 1.0,
+    experience_priors: dict[str, Any] | None = None,
 ) -> tuple[list[int], dict[int, dict[str, Any]]]:
+    remaining_count = max(1, len(row_by_index) - len(used))
     if _is_wall_online_strategy(strategy):
         if candidate_count >= 5:
             target_pool_size = 8
@@ -2052,9 +2059,12 @@ def _literature_stone_pool(
             target_pool_size = 6
         else:
             target_pool_size = 5
-        pool_size = min(target_pool_size, max(1, len(row_by_index) - len(used)))
+        pool_size = min(target_pool_size, remaining_count)
     else:
-        pool_size = min(8 if candidate_count >= 6 else 5, max(1, len(row_by_index) - len(used)))
+        pool_size = min(8 if candidate_count >= 6 else 5, remaining_count)
+    experience_enabled = bool(experience_priors and _is_wall_online_strategy(strategy))
+    if experience_enabled and slot.role in {"middle", "cap"}:
+        pool_size = min(pool_size + (3 if slot.role == "cap" else 2), remaining_count)
     rows = [row for idx, row in row_by_index.items() if idx not in used]
     if not rows:
         return [], {}
@@ -2066,6 +2076,7 @@ def _literature_stone_pool(
         rows,
         key=lambda row: (
             _primary_sort_score(_stone_role_score(row, slot.role, strategy))
+            + _experience_prior_score(row, slot, target_name, experience_priors)[0]
             + (
                 prior_weight * _base_support_prior_score(row, slot, target_name)
                 + (
@@ -2098,11 +2109,12 @@ def _literature_stone_pool(
                     if continuity_enabled
                     else 0.0
                 ),
+                **_experience_prior_meta(row_by_index[rock_index], slot, target_name, experience_priors),
             }
             for rank, rock_index in enumerate(pool)
         }
 
-    scored: list[tuple[float, float, int, dict[str, Any]]] = []
+    scored: list[tuple[float, float, int, dict[str, Any], dict[str, Any]]] = []
     for row in rows:
         rock_index = int(row["index"])
         prob = _stone_fit_prob(stone_fit_ranker, candidate_context or {}, row, rock_index, slot)
@@ -2111,18 +2123,20 @@ def _literature_stone_pool(
             prob = 0.0
         prior_score = _base_support_prior_score(row, slot, target_name) if prior_enabled else 0.0
         continuity_score = _base_continuity_prior_score(row, slot, target_name) if continuity_enabled else 0.0
+        experience_meta = _experience_prior_meta(row, slot, target_name, experience_priors)
         hybrid_score = (
             (1.0 - float(prob))
             + 0.035 * min(float(role_score), 10.0)
             + prior_weight * float(prior_score)
             + continuity_weight * float(continuity_score)
+            + float(experience_meta["experience_prior_score"])
         )
-        scored.append((hybrid_score, -float(prob), rock_index, row))
+        scored.append((hybrid_score, -float(prob), rock_index, row, experience_meta))
     scored.sort(key=lambda item: (item[0], item[1], item[2]))
     top_k = min(max(1, stone_fit_top_k if stone_fit_top_k > 0 else pool_size), len(scored))
-    pool = [rock_index for _hybrid, _neg_prob, rock_index, _row in scored[:top_k]]
+    pool = [rock_index for _hybrid, _neg_prob, rock_index, _row, _experience in scored[:top_k]]
     meta: dict[int, dict[str, Any]] = {}
-    for rank, (hybrid_score, neg_prob, rock_index, _row) in enumerate(scored[:top_k]):
+    for rank, (hybrid_score, neg_prob, rock_index, _row, experience_meta) in enumerate(scored[:top_k]):
         meta[rock_index] = {
             "stone_fit_prob": float(-neg_prob),
             "stone_fit_rank": rank,
@@ -2138,6 +2152,7 @@ def _literature_stone_pool(
             "base_continuity_prior_score": (
                 float(_base_continuity_prior_score(_row, slot, target_name)) if continuity_enabled else 0.0
             ),
+            **experience_meta,
         }
     return pool, meta
 
@@ -2146,6 +2161,64 @@ def _primary_sort_score(value: Any) -> float:
     if isinstance(value, (tuple, list)):
         return float(value[0]) if value else 0.0
     return float(value)
+
+
+def _experience_prior_meta(
+    row: dict[str, Any],
+    slot: TargetSlot,
+    target_name: str,
+    experience_priors: dict[str, Any] | None,
+) -> dict[str, Any]:
+    score, source_weight, cluster_weight = _experience_prior_score(row, slot, target_name, experience_priors)
+    return {
+        "experience_prior_enabled": int(bool(experience_priors)),
+        "experience_prior_score": float(score),
+        "experience_prior_source_weight": float(source_weight),
+        "experience_prior_cluster_weight": float(cluster_weight),
+    }
+
+
+def _experience_prior_score(
+    row: dict[str, Any],
+    slot: TargetSlot,
+    target_name: str,
+    experience_priors: dict[str, Any] | None,
+) -> tuple[float, float, float]:
+    if not experience_priors or "wall" not in target_name:
+        return 0.0, 0.0, 0.0
+    role_prior = (
+        experience_priors.get("role_priors", {})
+        if isinstance(experience_priors, dict)
+        else {}
+    ).get(str(slot.role), {})
+    if not isinstance(role_prior, dict):
+        return 0.0, 0.0, 0.0
+    source_weights = role_prior.get("source_kind_weights", {})
+    cluster_weights = role_prior.get("cluster_label_weights", {})
+    source = str(row.get("source_kind", ""))
+    label = str(row.get("cluster_label", ""))
+    source_weight = _lookup_prior_weight(source_weights, source)
+    cluster_weight = _lookup_prior_weight(cluster_weights, label)
+    role_gain = 1.0
+    if slot.role == "middle":
+        role_gain = 1.10
+    elif slot.role == "cap":
+        role_gain = 1.20
+    score = -role_gain * (0.24 * source_weight + 0.16 * cluster_weight)
+    return float(score), float(source_weight), float(cluster_weight)
+
+
+def _lookup_prior_weight(weights: Any, name: str) -> float:
+    if not isinstance(weights, dict) or not name:
+        return 0.0
+    value = weights.get(name)
+    if value is None and "_" in name:
+        family = "_".join(part for part in name.split("_") if not part.isdigit())
+        value = weights.get(family)
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _base_support_prior_score(row: dict[str, Any], slot: TargetSlot, target_name: str) -> float:

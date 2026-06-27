@@ -53,6 +53,7 @@ def main() -> None:
     candidate_pose_ranker = load_candidate_pose_ranker(args.candidate_pose_ranker_dir)
     pose_risk_ranker = load_pose_risk_ranker(args.pose_risk_ranker_dir)
     stone_fit_ranker = load_stone_fit_ranker(args.stone_fit_ranker_dir)
+    experience_priors = load_experience_priors(args.experience_priors)
     if assignment_plan is not None and len(targets) != 1:
         raise ValueError("--assignment-plan currently supports exactly one target. Pass one --targets value.")
     if role_screening is not None and assignment_plan is None:
@@ -121,6 +122,8 @@ def main() -> None:
                             "base_support_prior_weight": float(args.base_support_prior_weight),
                             "base_continuity_prior": bool(args.base_continuity_prior),
                             "base_continuity_prior_weight": float(args.base_continuity_prior_weight),
+                            "experience_priors": experience_priors,
+                            "experience_priors_path": str(args.experience_priors.resolve()) if args.experience_priors else "",
                             "role_screening_path": str(args.role_screening.resolve()) if args.role_screening else "",
                             "mjcf_dir": mjcf_dir,
                             "output_dir": output_dir,
@@ -295,6 +298,11 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="Weight for --base-continuity-prior in the literature/statics wall stone-pool ranking.",
     )
+    parser.add_argument(
+        "--experience-priors",
+        type=Path,
+        help="Optional JSON from analyze_success_experience.py. Applies weak role/source/cluster priors to wall stone-pool ranking.",
+    )
     parser.add_argument("--output", type=Path, default=Path("generated_structured"))
     return parser.parse_args()
 
@@ -359,6 +367,7 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
         base_support_prior_weight=float(task.get("base_support_prior_weight", 1.0)),
         base_continuity_prior=bool(task.get("base_continuity_prior", False)),
         base_continuity_prior_weight=float(task.get("base_continuity_prior_weight", 1.0)),
+        experience_priors=task.get("experience_priors"),
         progress_path=Path(task["output_dir"]) / "structured_progress.csv",
     )
     state_path = (
@@ -402,6 +411,8 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
     detailed["summary"]["base_support_prior_weight_requested"] = float(task.get("base_support_prior_weight", 1.0))
     detailed["summary"]["base_continuity_prior_requested"] = int(bool(task.get("base_continuity_prior", False)))
     detailed["summary"]["base_continuity_prior_weight_requested"] = float(task.get("base_continuity_prior_weight", 1.0))
+    detailed["summary"]["experience_priors_path"] = str(task.get("experience_priors_path", ""))
+    detailed["summary"]["experience_prior_requested"] = int(bool(task.get("experience_priors")))
     detailed["summary"]["role_screening_path"] = str(task.get("role_screening_path", ""))
     return {
         "summary": detailed["summary"],
@@ -523,6 +534,14 @@ def load_stone_fit_ranker(path: Path | None) -> dict[str, Any] | None:
 
 def load_pose_risk_ranker(path: Path | None) -> dict[str, Any] | None:
     return load_named_binary_model(path, "pose_risk_net", "Pose risk ranker")
+
+
+def load_experience_priors(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    if not path.exists():
+        raise FileNotFoundError(f"Experience priors file does not exist: {path}")
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def load_named_binary_model(path: Path | None, name: str, label: str) -> dict[str, Any] | None:
