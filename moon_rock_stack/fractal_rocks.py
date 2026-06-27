@@ -82,6 +82,20 @@ ROCK_PROFILES: dict[str, tuple[str, ...]] = {
         "equant_clast",
         "chock_clast",
     ),
+    "nasa_like_wall": (
+        "bearing_block_clast",
+        "course_block_clast",
+        "compact_block_clast",
+        "subangular_block",
+        "wall_block_clast",
+        "interlock_block_clast",
+        "angular_boulder_clast",
+        "bearing_block_clast",
+        "course_block_clast",
+        "cap_block_clast",
+        "buttress_clast",
+        "equant_clast",
+    ),
     "screening_stress": ROCK_KINDS
     + (
         "bearing_block_clast",
