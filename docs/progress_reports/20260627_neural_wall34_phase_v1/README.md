@@ -132,3 +132,29 @@ trial0 已完成：
 - 用 v3 PoseRiskNet 替换旧 PoseRiskNet 跑一轮小规模 4 层闭环，验证风险网络是否降低漂移和 cap 层失败。
 - StoneSlotNet 暂不强接入；下一版应把 support/depth map 或当前墙状态加入选石输入，否则容易只拟合石头类别。
 - 继续保留失败数据作为 hard negative，不删除任何原始输出。
+
+## 追加记录：c08 strict 完整结果
+
+时间：2026-06-27 19:57 左右。
+
+输出：
+
+- `D:\MoonStack\experiments\moon_rock_stack\batch_runs\20260626_low_release_wall_master_v1_c08_strict_4course`
+
+| trial | rock | skipped | stable | failure | strict | shape | visible | rmse_xy_m | max_drift_m | height_m |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 18 | 6 | 14 | 4 | 0 | 0 | 4 | 0.119 | 0.274 | 0.263 |
+| 1 | 21 | 3 | 15 | 6 | 0 | 0 | 4 | 0.165 | 0.406 | 0.243 |
+
+判断：
+
+- 两个 trial 都达到 `visible_courses=4`，说明当前方法已经能稳定进入四层可见结构。
+- trial1 前三层非常完整：base、course=1、course=2 基本连续放置，cap 层也成功放上 2 块左右，比 trial0 的 cap 连续 `no_feasible_pose` 明显好。
+- strict/shape 仍为 0，主要问题从“放不上第四层”转为“第四层放上后扰动和整体漂移仍超阈值”。
+- c08 trial1 是高价值近成功样本，应进入下一轮清洗集；cap 层 skipped 和失败样本应作为 hard negative。
+
+后续动作：
+
+- 自动调度器已启动 `20260626_low_release_wall_master_v1_c08_flywheel_3to4`，开始采集 c08 后续 3/4 层数据。
+- 该 flywheel 仍使用旧 PoseRiskNet 路线，适合作为对照数据。
+- 已另外尝试启动 `20260627_clean_poserisk_c08_strict_probe_v1` 来验证新 PoseRiskNet；该探针目前只写到 base 前段，尚未形成有效结果，暂不计入成功率。
