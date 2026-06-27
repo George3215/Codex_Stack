@@ -124,6 +124,7 @@ def main() -> None:
                             "base_continuity_prior_weight": float(args.base_continuity_prior_weight),
                             "experience_priors": experience_priors,
                             "experience_priors_path": str(args.experience_priors.resolve()) if args.experience_priors else "",
+                            "experience_prior_weight": float(args.experience_prior_weight),
                             "role_screening_path": str(args.role_screening.resolve()) if args.role_screening else "",
                             "mjcf_dir": mjcf_dir,
                             "output_dir": output_dir,
@@ -303,6 +304,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Optional JSON from analyze_success_experience.py. Applies weak role/source/cluster priors to wall stone-pool ranking.",
     )
+    parser.add_argument(
+        "--experience-prior-weight",
+        type=float,
+        default=1.0,
+        help="Multiplier for --experience-priors candidate-pool bias. Use values below 1.0 for conservative ablations.",
+    )
     parser.add_argument("--output", type=Path, default=Path("generated_structured"))
     return parser.parse_args()
 
@@ -368,6 +375,7 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
         base_continuity_prior=bool(task.get("base_continuity_prior", False)),
         base_continuity_prior_weight=float(task.get("base_continuity_prior_weight", 1.0)),
         experience_priors=task.get("experience_priors"),
+        experience_prior_weight=float(task.get("experience_prior_weight", 1.0)),
         progress_path=Path(task["output_dir"]) / "structured_progress.csv",
     )
     state_path = (
@@ -413,6 +421,7 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
     detailed["summary"]["base_continuity_prior_weight_requested"] = float(task.get("base_continuity_prior_weight", 1.0))
     detailed["summary"]["experience_priors_path"] = str(task.get("experience_priors_path", ""))
     detailed["summary"]["experience_prior_requested"] = int(bool(task.get("experience_priors")))
+    detailed["summary"]["experience_prior_weight_requested"] = float(task.get("experience_prior_weight", 1.0))
     detailed["summary"]["role_screening_path"] = str(task.get("role_screening_path", ""))
     return {
         "summary": detailed["summary"],
