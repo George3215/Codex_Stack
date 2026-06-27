@@ -117,17 +117,26 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Clean MoonStack policy-replacement training data.")
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--target", action="append", default=sorted(DEFAULT_TARGETS))
-    parser.add_argument("--strategy", action="append", default=sorted(DEFAULT_STRATEGIES))
-    parser.add_argument("--gravity", action="append", default=sorted(DEFAULT_GRAVITIES))
-    parser.add_argument("--role", action="append", default=sorted(DEFAULT_ROLES))
+    parser.add_argument("--target", action="append", default=None)
+    parser.add_argument("--strategy", action="append", default=None)
+    parser.add_argument("--gravity", action="append", default=None)
+    parser.add_argument("--role", action="append", default=None)
     parser.add_argument("--max-target-error-m", type=float, default=1.25)
     parser.add_argument("--max-abs-y-error-m", type=float, default=0.75)
     parser.add_argument("--max-disturbance-m", type=float, default=1.25)
     parser.add_argument("--max-velocity", type=float, default=80.0)
     parser.add_argument("--min-rock-volume", type=float, default=1e-7)
     parser.add_argument("--drop-skipped-placement", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.target is None:
+        args.target = sorted(DEFAULT_TARGETS)
+    if args.strategy is None:
+        args.strategy = sorted(DEFAULT_STRATEGIES)
+    if args.gravity is None:
+        args.gravity = sorted(DEFAULT_GRAVITIES)
+    if args.role is None:
+        args.role = sorted(DEFAULT_ROLES)
+    return args
 
 
 def filter_csv(
@@ -390,6 +399,46 @@ def write_jsonl(path: Path, rows: list[dict[str, str]]) -> None:
 
 
 def write_readme(output: Path, summary: dict[str, Any]) -> None:
+    filters = summary.get("filters", {})
+    targets = ", ".join(f"`{item}`" for item in filters.get("targets", []))
+    strategies = ", ".join(f"`{item}`" for item in filters.get("strategies", []))
+    gravities = ", ".join(f"`{item}`" for item in filters.get("gravities", []))
+    roles = ", ".join(f"`{item}`" for item in filters.get("roles", []))
+    lines = [
+        "# Cleaned Policy Replacement Dataset",
+        "",
+        "这是用于 3/4 层单面墙神经策略替代的清洗数据集。原始数据没有删除，本目录只保存筛选后的训练数据。",
+        "",
+        f"- source: `{summary['source_dataset']}`",
+        f"- run_examples: `{summary['run_example_count']}`",
+        f"- placement_examples: `{summary['placement_example_count']}`",
+        f"- candidate_pose_examples: `{summary['candidate_pose_example_count']}`",
+        f"- assignment_candidate_examples: `{summary['assignment_candidate_example_count']}`",
+        "",
+        "## 清洗规则",
+        "",
+        f"- targets: {targets}",
+        f"- strategies: {strategies}",
+        f"- gravities: {gravities}",
+        f"- roles: {roles}",
+        f"- max_target_error_m: `{filters.get('max_target_error_m')}`",
+        f"- max_abs_y_error_m: `{filters.get('max_abs_y_error_m')}`",
+        f"- max_disturbance_m: `{filters.get('max_disturbance_m')}`",
+        f"- max_velocity: `{filters.get('max_velocity')}`",
+        f"- min_rock_volume: `{filters.get('min_rock_volume')}`",
+        f"- drop_skipped_placement: `{filters.get('drop_skipped_placement')}`",
+        "- 候选位姿必须有完整 pose、几何特征和物理后验指标。",
+        "- 明显异常的候选会被隔离：过大落点误差、过大 y 偏差、过大扰动或速度。",
+        "- strict 失败、失败 placement、skipped slot 会保留为负样本，除非显式设置 `--drop-skipped-placement`。",
+        "",
+        "## 用途",
+        "",
+        "- `candidate_pose_examples.csv`: 训练 PoseRiskNet / SupportMapRanker / WallStateCritic。",
+        "- `assignment_candidate_examples.csv`: 训练 StoneSlotNet 粗筛。",
+        "- `placement_examples.csv`: 统计成功/失败经验和结构层级瓶颈。",
+    ]
+    (output / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return
     lines = [
         "# Cleaned Policy Replacement Dataset",
         "",
