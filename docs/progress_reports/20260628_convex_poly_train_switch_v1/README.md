@@ -102,6 +102,44 @@
 - 输出目录已产生 `meshes`、`mjcf`、`features.csv`、`structured_progress.csv`。
 - 当前任务正在推进，已进入 trial 0 的 middle course。
 
+首个完整 trial 结果：
+
+| 指标 | 数值 |
+| --- | ---: |
+| trial | 0 |
+| strict success | 0 |
+| shape success | 0 |
+| stable stones | 8 / 15 |
+| failure stones | 7 |
+| visible courses | 3 |
+| target RMSE | 0.6242 m |
+| target max error | 1.8744 m |
+| stack height | 0.1901 m |
+| max horizontal drift | 0.2733 m |
+| wall y span | 1.3001 m |
+| wall outlier count | 5 |
+| velocity inf norm | 0.9285 |
+
+失败分布：
+
+| 失败类型 | course | role | 数量 |
+| --- | ---: | --- | ---: |
+| `missed_target` | 0 | base | 3 |
+| `missed_target` | 1 | middle | 3 |
+| `missed_target+post_hold_drift` | 2 | cap | 1 |
+
+典型失败图：
+
+- 正视 RGB：`D:\MoonStack\experiments\moon_rock_stack\batch_runs\20260628_convex_poly_wall_train_3course_cmd_v1\captures_convex_poly_failure_v1\00_single_face_wall_3course_v1_failure_statics_wall_moon_trial_00\wall_front_rgb.png`
+- 俯视 object depth：`D:\MoonStack\experiments\moon_rock_stack\batch_runs\20260628_convex_poly_wall_train_3course_cmd_v1\captures_convex_poly_failure_v1\00_single_face_wall_3course_v1_failure_statics_wall_moon_trial_00\wall_top_object_depth.png`
+
+首轮结论：
+
+- 凸多面体训练分布已生效，石头不是 NASA-like profile。
+- 失败主要来自墙线散开和外点，而不是无法形成多面体接触。
+- 当前 `convex_poly_wall_train` 的石头尺度/落点约束偏粗，导致 base 和 middle 的 `missed_target` 很多。
+- 下一轮应优先收紧石头尺度、墙厚约束和目标槽位误差，而不是单纯增加候选数量。
+
 ## 对已有 NASA-like 批次的处理
 
 以下批次不进入训练集：
