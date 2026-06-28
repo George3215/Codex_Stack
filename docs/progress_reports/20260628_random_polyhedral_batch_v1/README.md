@@ -166,3 +166,9 @@
 - 该失败启动记录已保留在：
   `D:\MoonStack\experiments\moon_rock_stack\batch_runs\async_jobs\20260628_142057_20260628_random_polyhedral_v3_continuity_3course_batch_v1`
 - 为保证有效数据，本轮改用前台小批次产出 `20260628_random_polyhedral_v3_continuity_3course_batch_fg_v1`。
+- 随后改用 `.cmd` 后台方式启动第三个随机多面体对照批次：
+  `D:\MoonStack\experiments\moon_rock_stack\batch_runs\async_jobs\20260628_cmd_random_polyhedral_v3_mixed_3course_v1`
+- 第三个批次输出目录：
+  `D:\MoonStack\experiments\moon_rock_stack\batch_runs\20260628_random_polyhedral_v3_mixed_3course_cmd_v1`
+- 第三个批次目的：降低 `base_support_prior`/`base_continuity_prior` 权重，同时提高 `pose_risk_weight=0.65`，检查是否能保留高度收益但减少石堆化、外点和漂移。
+- 启动检查：`started_at.txt` 已写入，输出目录已产生 `meshes`、`mjcf`、`features.csv`、`structured_progress.csv`，说明 `.cmd` 后台方式有效。
