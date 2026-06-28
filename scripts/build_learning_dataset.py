@@ -3,12 +3,17 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+REPO = Path(__file__).resolve().parents[1]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 
 from moon_rock_stack.features import FEATURE_COLUMNS, extract_features
 from moon_rock_stack.fractal_rocks import RockMesh
@@ -21,9 +26,15 @@ MESH_BACKFILL_COLUMNS = tuple(FEATURE_COLUMNS) + ("mass",)
 def main() -> int:
     args = parse_args()
     batch_root = args.batch_root.resolve()
-    run_dirs = discover_run_dirs(batch_root, args.run)
-    if not run_dirs:
+    discovered_run_dirs = discover_run_dirs(batch_root, args.run)
+    run_dirs, excluded_runs = filter_run_dirs(discovered_run_dirs, include_nasa_like=args.include_nasa_like_test_runs)
+    if not discovered_run_dirs:
         raise SystemExit(f"No run directories with results.csv found under {batch_root}")
+    if not run_dirs:
+        raise SystemExit(
+            "No training run directories remain after filtering. "
+            "NASA-like profiles are excluded by default; pass --include-nasa-like-test-runs only for held-out test datasets."
+        )
 
     output_dir = unique_dir(args.output.resolve())
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -90,8 +101,18 @@ def main() -> int:
     write_csv(output_dir / "assignment_candidate_examples.csv", assignment_rows)
     write_jsonl(output_dir / "placement_examples.jsonl", placement_rows)
     write_jsonl(output_dir / "candidate_pose_examples.jsonl", candidate_pose_rows)
-    write_summary(output_dir, batch_root, run_dirs, run_rows, placement_rows, candidate_pose_rows, assignment_rows, warnings)
-    write_readme(output_dir, batch_root, run_dirs, warnings)
+    write_summary(
+        output_dir,
+        batch_root,
+        run_dirs,
+        excluded_runs,
+        run_rows,
+        placement_rows,
+        candidate_pose_rows,
+        assignment_rows,
+        warnings,
+    )
+    write_readme(output_dir, batch_root, run_dirs, excluded_runs, warnings)
     print(output_dir)
     return 0
 
@@ -107,6 +128,14 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Optional run directory. Can be passed multiple times. Defaults to all runs under --batch-root.",
     )
+    parser.add_argument(
+        "--include-nasa-like-test-runs",
+        action="store_true",
+        help=(
+            "Include rock_profile values that start with nasa_like. Keep this off for training; "
+            "NASA-like data is reserved for held-out testing and diagnosis."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -115,6 +144,35 @@ def discover_run_dirs(batch_root: Path, requested_runs: list[Path]) -> list[Path
         dirs = [(path if path.is_absolute() else batch_root / path).resolve() for path in requested_runs]
         return sorted(path for path in dirs if (path / "results.csv").exists())
     return sorted(path.parent for path in batch_root.glob("**/results.csv"))
+
+
+def filter_run_dirs(run_dirs: list[Path], include_nasa_like: bool) -> tuple[list[Path], list[dict[str, str]]]:
+    kept: list[Path] = []
+    excluded: list[dict[str, str]] = []
+    for run_dir in run_dirs:
+        profile = read_protocol_config(run_dir).get("rock_profile", "")
+        if profile.startswith("nasa_like") and not include_nasa_like:
+            excluded.append({"run": run_dir.name, "rock_profile": profile, "reason": "nasa_like_test_only"})
+            continue
+        kept.append(run_dir)
+    return kept, excluded
+
+
+def read_protocol_config(run_dir: Path) -> dict[str, str]:
+    protocol = run_dir / "PROTOCOL.md"
+    if not protocol.exists():
+        return {}
+    config: dict[str, str] = {}
+    for line in protocol.read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("- "):
+            continue
+        key_value = stripped[2:].split(":", 1)
+        if len(key_value) != 2:
+            continue
+        key, value = key_value
+        config[key.strip()] = value.strip()
+    return config
 
 
 def unique_dir(path: Path) -> Path:
@@ -602,6 +660,7 @@ def write_summary(
     output_dir: Path,
     batch_root: Path,
     run_dirs: list[Path],
+    excluded_runs: list[dict[str, str]],
     run_rows: list[dict[str, Any]],
     placement_rows: list[dict[str, Any]],
     candidate_pose_rows: list[dict[str, Any]],
@@ -628,6 +687,8 @@ def write_summary(
         "batch_root": str(batch_root),
         "output_dir": str(output_dir),
         "run_dir_count": len(run_dirs),
+        "excluded_run_count": len(excluded_runs),
+        "excluded_runs": excluded_runs,
         "run_example_count": len(run_rows),
         "placement_example_count": len(placement_rows),
         "candidate_pose_example_count": len(candidate_pose_rows),
@@ -645,12 +706,19 @@ def write_summary(
     (output_dir / "dataset_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
-def write_readme(output_dir: Path, batch_root: Path, run_dirs: list[Path], warnings: list[str]) -> None:
+def write_readme(
+    output_dir: Path,
+    batch_root: Path,
+    run_dirs: list[Path],
+    excluded_runs: list[dict[str, str]],
+    warnings: list[str],
+) -> None:
     lines = [
         "# MoonStack Learning Dataset V0",
         "",
         f"Batch root: `{batch_root}`",
         f"Run directories scanned: {len(run_dirs)}",
+        f"Run directories excluded as NASA-like held-out test data: {len(excluded_runs)}",
         "",
         "## Files",
         "",
@@ -675,6 +743,16 @@ def write_readme(output_dir: Path, batch_root: Path, run_dirs: list[Path], warni
         "",
         "The next data-collection step is to generate larger candidate-pose batches with higher `--candidates` values under both Earth and Moon gravity.",
     ]
+    if excluded_runs:
+        lines.extend(
+            [
+                "",
+                "## Held-Out Test Exclusions",
+                "",
+                "Runs with `rock_profile` beginning with `nasa_like` are excluded by default because NASA-like stones are reserved for held-out testing and diagnosis, not training.",
+            ]
+        )
+        lines.extend(f"- `{item['run']}`: `{item['rock_profile']}` ({item['reason']})" for item in excluded_runs)
     if warnings:
         lines.extend(["", "## Warnings", ""])
         lines.extend(f"- {warning}" for warning in warnings)

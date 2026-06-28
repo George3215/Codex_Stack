@@ -6,6 +6,11 @@ from typing import Iterable
 
 import numpy as np
 
+try:
+    from scipy.spatial import ConvexHull
+except Exception:  # pragma: no cover - optional dependency guard for import-time diagnostics.
+    ConvexHull = None  # type: ignore[assignment]
+
 
 @dataclass
 class RockMesh:
@@ -82,6 +87,36 @@ ROCK_PROFILES: dict[str, tuple[str, ...]] = {
         "equant_clast",
         "chock_clast",
     ),
+    "convex_poly_wall_train": (
+        "bearing_block_clast",
+        "buttress_clast",
+        "course_block_clast",
+        "compact_block_clast",
+        "wall_block_clast",
+        "tie_bridge_clast",
+        "interlock_block_clast",
+        "cap_block_clast",
+        "equant_clast",
+        "chock_clast",
+        "subangular_block",
+        "course_block_clast",
+    ),
+    "convex_poly_diverse_train": (
+        "bearing_block_clast",
+        "buttress_clast",
+        "course_block_clast",
+        "compact_block_clast",
+        "wall_block_clast",
+        "tie_bridge_clast",
+        "interlock_block_clast",
+        "cap_block_clast",
+        "equant_clast",
+        "chock_clast",
+        "subangular_block",
+        "wedge_clast",
+        "angular_boulder_clast",
+        "keystone_clast",
+    ),
     "nasa_like_wall": (
         "bearing_block_clast",
         "course_block_clast",
@@ -137,6 +172,8 @@ ROCK_PROFILES: dict[str, tuple[str, ...]] = {
 
 
 POLYHEDRAL_PROFILE_STYLES = {
+    "convex_poly_wall_train": "convex_poly_wall_train",
+    "convex_poly_diverse_train": "convex_poly_diverse_train",
     "nasa_like_wall_v2": "nasa_irregular",
     "nasa_like_wall_v3": "nasa_stackable_irregular",
 }
@@ -173,6 +210,8 @@ def generate_fractal_rock(
     _ = lat_steps, lon_steps
     rng = np.random.default_rng(seed)
     params = _kind_params(kind, rng)
+    if style.startswith("convex_poly_"):
+        return _generate_convex_polyhedral_rock(kind=kind, rng=rng, params=params, style=style)
     if style == "nasa_irregular":
         params = _nasa_irregular_params(params, rng, stackable=False)
     elif style == "nasa_stackable_irregular":
@@ -253,6 +292,67 @@ def generate_fractal_rock(
     vertices -= vertices.mean(axis=0)
     vertices = _enforce_non_slab_thickness(vertices, min_short_to_mid=0.62)
     vertices = _limit_local_protrusions(vertices, faces, max_excess=0.16, iterations=3)
+    vertices -= vertices.mean(axis=0)
+    return vertices, faces
+
+
+def _generate_convex_polyhedral_rock(
+    kind: str,
+    rng: np.random.Generator,
+    params: dict[str, object],
+    style: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    if ConvexHull is None:
+        raise RuntimeError("scipy.spatial.ConvexHull is required for convex_poly_* rock profiles.")
+
+    base_radius = rng.uniform(0.058, 0.098)
+    effective_radius = base_radius * float(params.get("radius_scale", 1.0))
+    subdivisions = 1 if style == "convex_poly_wall_train" else 2
+    vertices, faces = _subdivided_icosahedron(subdivisions=subdivisions)
+    directions = vertices / np.maximum(np.linalg.norm(vertices, axis=1, keepdims=True), 1e-9)
+
+    jitter = 0.040 if style == "convex_poly_wall_train" else 0.060
+    directions = _jitter_directions(directions=directions, rng=rng, amount=jitter)
+    radial = _broad_lobed_radius(
+        directions=directions,
+        faces=faces,
+        rng=rng,
+        roughness=min(float(params["roughness"]) * 0.72, 0.130),
+        lobe_count=max(5, int(params["lobe_count"]) - 1),
+        sigma_range=(0.24, 0.38),
+        smooth_iterations=1,
+        smooth_strength=0.32,
+    )
+    radial *= rng.uniform(0.94, 1.06, size=len(radial))
+    radial = np.clip(radial, 0.78, 1.22)
+    vertices = directions * radial[:, None] * effective_radius * params["scale"]
+
+    if kind == "wedge_clast":
+        vertices = _apply_wedge(vertices, rng)
+    elif kind in {"fractured_clast", "notched_block_clast", "interlock_block_clast"}:
+        vertices = _apply_shear(vertices, rng, amount=0.055)
+    elif kind in {"buttress_clast", "bearing_block_clast"}:
+        vertices = _apply_buttress(vertices)
+    elif kind in {"keystone_clast", "chock_clast"}:
+        vertices = _apply_wedge(vertices, rng)
+        vertices = _apply_shear(vertices, rng, amount=0.035)
+    elif kind == "cap_block_clast":
+        vertices = _apply_shear(vertices, rng, amount=0.025)
+
+    support_count = 2 + int(kind in {"bearing_block_clast", "buttress_clast", "wall_block_clast", "course_block_clast"})
+    vertices = _apply_broad_support_facets(
+        vertices=vertices,
+        rng=rng,
+        count=support_count,
+        quantile=0.16,
+        strength=0.78,
+    )
+    vertices -= vertices.mean(axis=0)
+    vertices = _enforce_non_slab_thickness(vertices, min_short_to_mid=0.66)
+    vertices, faces = _convex_hull_mesh(vertices)
+    vertices = _limit_local_protrusions(vertices, faces, max_excess=0.18, iterations=2)
+    vertices -= vertices.mean(axis=0)
+    vertices, faces = _convex_hull_mesh(vertices)
     vertices -= vertices.mean(axis=0)
     return vertices, faces
 
@@ -750,6 +850,26 @@ def _enforce_non_slab_thickness(vertices: np.ndarray, min_short_to_mid: float) -
         vertices = vertices.copy()
         vertices[:, shortest_axis] *= target / max(shortest, 1e-9)
     return vertices
+
+
+def _convex_hull_mesh(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    if ConvexHull is None:
+        raise RuntimeError("scipy.spatial.ConvexHull is required for convex hull mesh generation.")
+    hull = ConvexHull(points)
+    used = np.unique(hull.simplices.reshape(-1))
+    remap = {int(old): index for index, old in enumerate(used)}
+    vertices = points[used].copy()
+    center = vertices.mean(axis=0)
+    faces: list[list[int]] = []
+    for simplex in hull.simplices:
+        a_old, b_old, c_old = (int(value) for value in simplex)
+        a, b, c = points[a_old], points[b_old], points[c_old]
+        normal = np.cross(b - a, c - a)
+        face_center = (a + b + c) / 3.0
+        if float(np.dot(normal, face_center - center)) < 0.0:
+            b_old, c_old = c_old, b_old
+        faces.append([remap[a_old], remap[b_old], remap[c_old]])
+    return vertices, np.asarray(faces, dtype=np.int32)
 
 
 def write_obj(path: Path, vertices: np.ndarray, faces: np.ndarray) -> None:
