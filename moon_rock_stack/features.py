@@ -7,10 +7,16 @@ import numpy as np
 
 from .fractal_rocks import RockMesh
 
+try:
+    from scipy.spatial import ConvexHull
+except Exception:  # pragma: no cover - optional dependency guard.
+    ConvexHull = None  # type: ignore[assignment]
+
 
 FEATURE_COLUMNS = (
     "volume",
     "surface_area",
+    "face_count",
     "bbox_x",
     "bbox_y",
     "bbox_z",
@@ -21,6 +27,9 @@ FEATURE_COLUMNS = (
     "angularity",
     "spike_score",
     "compactness",
+    "rectangularity",
+    "roundness_proxy",
+    "concavity_proxy",
     "stability_score",
     "major_face_count",
     "largest_face_area_ratio",
@@ -52,6 +61,11 @@ def extract_features(rock: RockMesh) -> dict[str, Any]:
     angularity = mesh_angularity(vertices, faces)
     spike_score = mesh_spike_score(vertices, faces)
     compactness = float(volume / max(float(np.prod(bbox)), 1e-9))
+    rectangularity = compactness
+    roundness_proxy = float(np.clip(sphericity * (1.0 - min(angularity / 0.35, 1.0)), 0.0, 1.0))
+    hull_volume = convex_hull_volume(vertices)
+    hull_concavity = float(np.clip(1.0 - volume / max(hull_volume, 1e-9), 0.0, 1.0)) if hull_volume > 0.0 else 0.0
+    concavity_proxy = max(hull_concavity, mesh_concavity_score(vertices, faces))
     elongation = float(longest / middle)
     flatness = float(middle / shortest)
     stability_score = float((longest * middle) / max(shortest * shortest, 1e-9) * max(sphericity, 0.1))
@@ -63,6 +77,7 @@ def extract_features(rock: RockMesh) -> dict[str, Any]:
         "seed": rock.seed,
         "volume": float(volume),
         "surface_area": float(surface_area),
+        "face_count": float(len(faces)),
         "bbox_x": float(bbox[0]),
         "bbox_y": float(bbox[1]),
         "bbox_z": float(bbox[2]),
@@ -73,6 +88,9 @@ def extract_features(rock: RockMesh) -> dict[str, Any]:
         "angularity": angularity,
         "spike_score": spike_score,
         "compactness": compactness,
+        "rectangularity": rectangularity,
+        "roundness_proxy": roundness_proxy,
+        "concavity_proxy": concavity_proxy,
         "stability_score": stability_score,
         "mass": float(volume * 2600.0),
     }
@@ -90,6 +108,15 @@ def mesh_volume(vertices: np.ndarray, faces: np.ndarray) -> float:
     tris = vertices[faces]
     signed = np.einsum("ij,ij->i", tris[:, 0], np.cross(tris[:, 1], tris[:, 2])) / 6.0
     return float(abs(signed.sum()))
+
+
+def convex_hull_volume(vertices: np.ndarray) -> float:
+    if ConvexHull is None or len(vertices) < 4:
+        return 0.0
+    try:
+        return float(ConvexHull(vertices).volume)
+    except Exception:
+        return 0.0
 
 
 def mesh_angularity(vertices: np.ndarray, faces: np.ndarray) -> float:
@@ -127,6 +154,25 @@ def mesh_spike_score(vertices: np.ndarray, faces: np.ndarray) -> float:
         local_ref = float(np.median(radii[list(neighbors)]))
         excesses.append(max(0.0, radii[idx] / max(local_ref, 1e-9) - 1.0))
     return float(max(excesses) if excesses else 0.0)
+
+
+def mesh_concavity_score(vertices: np.ndarray, faces: np.ndarray) -> float:
+    centroid = vertices.mean(axis=0)
+    radii = np.linalg.norm(vertices - centroid, axis=1)
+    adjacency = [set() for _ in range(len(vertices))]
+    for face in faces:
+        a, b, c = (int(face[0]), int(face[1]), int(face[2]))
+        adjacency[a].update((b, c))
+        adjacency[b].update((a, c))
+        adjacency[c].update((a, b))
+
+    deficits: list[float] = []
+    for idx, neighbors in enumerate(adjacency):
+        if not neighbors:
+            continue
+        local_ref = float(np.median(radii[list(neighbors)]))
+        deficits.append(max(0.0, 1.0 - radii[idx] / max(local_ref, 1e-9)))
+    return float(max(deficits) if deficits else 0.0)
 
 
 def mesh_face_priors(vertices: np.ndarray, faces: np.ndarray) -> dict[str, float]:

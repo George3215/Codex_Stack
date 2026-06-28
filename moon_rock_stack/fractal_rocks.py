@@ -117,6 +117,20 @@ ROCK_PROFILES: dict[str, tuple[str, ...]] = {
         "angular_boulder_clast",
         "keystone_clast",
     ),
+    "encyclopedic_poly_train": (
+        "bearing_block_clast",
+        "compact_block_clast",
+        "subangular_block",
+        "equant_clast",
+        "wall_block_clast",
+        "course_block_clast",
+        "buttress_clast",
+        "chock_clast",
+        "interlock_block_clast",
+        "cap_block_clast",
+        "wedge_clast",
+        "angular_boulder_clast",
+    ),
     "nasa_like_wall": (
         "bearing_block_clast",
         "course_block_clast",
@@ -174,6 +188,7 @@ ROCK_PROFILES: dict[str, tuple[str, ...]] = {
 POLYHEDRAL_PROFILE_STYLES = {
     "convex_poly_wall_train": "convex_poly_wall_train",
     "convex_poly_diverse_train": "convex_poly_diverse_train",
+    "encyclopedic_poly_train": "encyclopedic_mixed_train",
     "nasa_like_wall_v2": "nasa_irregular",
     "nasa_like_wall_v3": "nasa_stackable_irregular",
 }
@@ -210,6 +225,8 @@ def generate_fractal_rock(
     _ = lat_steps, lon_steps
     rng = np.random.default_rng(seed)
     params = _kind_params(kind, rng)
+    if style == "encyclopedic_mixed_train":
+        return _generate_encyclopedic_polyhedral_rock(kind=kind, rng=rng, params=params)
     if style.startswith("convex_poly_"):
         return _generate_convex_polyhedral_rock(kind=kind, rng=rng, params=params, style=style)
     if style == "nasa_irregular":
@@ -355,6 +372,117 @@ def _generate_convex_polyhedral_rock(
     vertices, faces = _convex_hull_mesh(vertices)
     vertices -= vertices.mean(axis=0)
     return vertices, faces
+
+
+def _generate_encyclopedic_polyhedral_rock(
+    kind: str,
+    rng: np.random.Generator,
+    params: dict[str, object],
+) -> tuple[np.ndarray, np.ndarray]:
+    base_radius = rng.uniform(0.052, 0.088)
+    effective_radius = base_radius * float(params.get("radius_scale", 1.0))
+    vertices, faces = _subdivided_icosahedron(subdivisions=1)
+    directions = vertices / np.maximum(np.linalg.norm(vertices, axis=1, keepdims=True), 1e-9)
+
+    is_blocky = rng.random() < 0.50
+    is_concave = rng.random() < 0.35
+    if is_blocky:
+        axis_scale = _mixed_blocky_axis_scale(kind, rng)
+        roughness = rng.uniform(0.035, 0.080)
+        lobe_count = int(rng.integers(4, 7))
+        radial_noise = rng.uniform(0.985, 1.015, size=len(directions))
+    else:
+        axis_scale = _mixed_rounded_axis_scale(kind, rng)
+        roughness = rng.uniform(0.018, 0.055)
+        lobe_count = int(rng.integers(5, 9))
+        radial_noise = rng.uniform(0.975, 1.025, size=len(directions))
+
+    directions = _jitter_directions(directions=directions, rng=rng, amount=0.020 if is_blocky else 0.036)
+    radial = _broad_lobed_radius(
+        directions=directions,
+        faces=faces,
+        rng=rng,
+        roughness=roughness,
+        lobe_count=lobe_count,
+        sigma_range=(0.24, 0.40) if is_blocky else (0.30, 0.48),
+        smooth_iterations=1 if is_blocky else 2,
+        smooth_strength=0.30 if is_blocky else 0.42,
+    )
+    vertices = directions * (radial * radial_noise)[:, None] * effective_radius * axis_scale
+
+    if is_blocky:
+        vertices = _apply_broad_support_facets(
+            vertices=vertices,
+            rng=rng,
+            count=3 + int(kind in {"bearing_block_clast", "buttress_clast", "wall_block_clast"}),
+            quantile=0.18,
+            strength=0.82,
+        )
+    else:
+        vertices = _limit_local_protrusions(vertices, faces, max_excess=0.10, iterations=4)
+
+    if kind in {"wedge_clast", "chock_clast", "keystone_clast"}:
+        vertices = _apply_wedge(vertices, rng)
+    elif kind in {"buttress_clast", "bearing_block_clast"}:
+        vertices = _apply_buttress(vertices)
+    elif kind in {"interlock_block_clast", "angular_boulder_clast"}:
+        vertices = _apply_shear(vertices, rng, amount=0.05)
+
+    vertices -= vertices.mean(axis=0)
+    vertices = _enforce_non_slab_thickness(vertices, min_short_to_mid=0.64)
+    if ConvexHull is not None:
+        vertices, faces = _convex_hull_mesh(vertices)
+    if is_concave:
+        vertices = _apply_concavity_dents(
+            vertices=vertices,
+            rng=rng,
+            count=int(rng.integers(2, 5)),
+            radius_range=(0.32, 0.54),
+            depth_range=(0.085, 0.185),
+        )
+        vertices = _limit_local_protrusions(vertices, faces, max_excess=0.16, iterations=2)
+    vertices -= vertices.mean(axis=0)
+    return vertices, faces
+
+
+def _mixed_blocky_axis_scale(kind: str, rng: np.random.Generator) -> np.ndarray:
+    if kind in {"bearing_block_clast", "buttress_clast", "wall_block_clast"}:
+        return _scale_xyz(rng.uniform(1.10, 1.34), rng.uniform(1.02, 1.22), rng.uniform(0.82, 1.02))
+    if kind in {"course_block_clast", "tie_bridge_clast"}:
+        return _scale_xyz(rng.uniform(1.12, 1.42), rng.uniform(0.88, 1.08), rng.uniform(0.86, 1.08))
+    return _scale_xyz(rng.uniform(0.94, 1.16), rng.uniform(0.94, 1.16), rng.uniform(0.90, 1.14))
+
+
+def _mixed_rounded_axis_scale(kind: str, rng: np.random.Generator) -> np.ndarray:
+    if kind in {"wedge_clast", "angular_boulder_clast", "interlock_block_clast"}:
+        return _scale_from_ratios(rng.uniform(1.04, 1.22), rng.uniform(1.00, 1.16), rng)
+    return _scale_xyz(rng.uniform(0.94, 1.08), rng.uniform(0.94, 1.08), rng.uniform(0.94, 1.10))
+
+
+def _apply_concavity_dents(
+    vertices: np.ndarray,
+    rng: np.random.Generator,
+    count: int,
+    radius_range: tuple[float, float],
+    depth_range: tuple[float, float],
+) -> np.ndarray:
+    vertices = vertices.copy()
+    center = vertices.mean(axis=0)
+    vectors = vertices - center
+    radii = np.linalg.norm(vectors, axis=1)
+    mean_radius = max(float(radii.mean()), 1e-9)
+    directions = vectors / np.maximum(radii[:, None], 1e-9)
+    for _ in range(count):
+        anchor = rng.normal(size=3)
+        anchor /= max(float(np.linalg.norm(anchor)), 1e-9)
+        cos_angle = np.clip(directions @ anchor, -1.0, 1.0)
+        angular_radius = rng.uniform(*radius_range)
+        weights = np.clip((cos_angle - np.cos(angular_radius)) / max(1.0 - np.cos(angular_radius), 1e-9), 0.0, 1.0)
+        if not np.any(weights > 0.0):
+            continue
+        depth = mean_radius * rng.uniform(*depth_range)
+        vertices -= directions * (depth * weights**2)[:, None]
+    return vertices
 
 
 def _kind_params(kind: str, rng: np.random.Generator) -> dict[str, object]:

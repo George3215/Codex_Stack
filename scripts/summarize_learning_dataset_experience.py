@@ -12,6 +12,7 @@ from typing import Any
 FEATURE_COLUMNS = [
     "rock_volume",
     "rock_surface_area",
+    "rock_face_count",
     "rock_bbox_x",
     "rock_bbox_y",
     "rock_bbox_z",
@@ -22,6 +23,9 @@ FEATURE_COLUMNS = [
     "rock_angularity",
     "rock_spike_score",
     "rock_compactness",
+    "rock_rectangularity",
+    "rock_roundness_proxy",
+    "rock_concavity_proxy",
     "rock_stability_score",
     "rock_major_face_count",
     "rock_largest_face_area_ratio",
