@@ -96,6 +96,34 @@ ROCK_PROFILES: dict[str, tuple[str, ...]] = {
         "buttress_clast",
         "equant_clast",
     ),
+    "nasa_like_wall_v2": (
+        "bearing_block_clast",
+        "course_block_clast",
+        "compact_block_clast",
+        "subangular_block",
+        "wall_block_clast",
+        "interlock_block_clast",
+        "angular_boulder_clast",
+        "bearing_block_clast",
+        "course_block_clast",
+        "buttress_clast",
+        "compact_block_clast",
+        "cap_block_clast",
+    ),
+    "nasa_like_wall_v3": (
+        "bearing_block_clast",
+        "bearing_block_clast",
+        "course_block_clast",
+        "compact_block_clast",
+        "subangular_block",
+        "wall_block_clast",
+        "interlock_block_clast",
+        "buttress_clast",
+        "course_block_clast",
+        "compact_block_clast",
+        "cap_block_clast",
+        "angular_boulder_clast",
+    ),
     "screening_stress": ROCK_KINDS
     + (
         "bearing_block_clast",
@@ -105,6 +133,12 @@ ROCK_PROFILES: dict[str, tuple[str, ...]] = {
         "interlock_block_clast",
         "cap_block_clast",
     ),
+}
+
+
+POLYHEDRAL_PROFILE_STYLES = {
+    "nasa_like_wall_v2": "nasa_irregular",
+    "nasa_like_wall_v3": "nasa_stackable_irregular",
 }
 
 
@@ -120,10 +154,11 @@ def generate_rocks(
     if kinds is None:
         raise ValueError(f"Unknown rock profile: {profile}")
     rocks: list[RockMesh] = []
+    style = POLYHEDRAL_PROFILE_STYLES.get(profile, "default")
     for index in range(count):
         kind = kinds[index % len(kinds)]
         rock_seed = int(rng.integers(0, 2**31 - 1))
-        vertices, faces = generate_fractal_rock(kind, rock_seed, lat_steps, lon_steps)
+        vertices, faces = generate_fractal_rock(kind, rock_seed, lat_steps, lon_steps, style=style)
         rocks.append(RockMesh(index=index, kind=kind, vertices=vertices, faces=faces, seed=rock_seed))
     return rocks
 
@@ -133,23 +168,43 @@ def generate_fractal_rock(
     seed: int,
     lat_steps: int = 14,
     lon_steps: int = 28,
+    style: str = "default",
 ) -> tuple[np.ndarray, np.ndarray]:
     _ = lat_steps, lon_steps
     rng = np.random.default_rng(seed)
     params = _kind_params(kind, rng)
+    if style == "nasa_irregular":
+        params = _nasa_irregular_params(params, rng, stackable=False)
+    elif style == "nasa_stackable_irregular":
+        params = _nasa_irregular_params(params, rng, stackable=True)
+    elif style != "default":
+        raise ValueError(f"Unknown rock generation style: {style}")
     base_radius = rng.uniform(0.055, 0.095)
     effective_radius = base_radius * float(params.get("radius_scale", 1.0))
 
-    vertices, faces = _subdivided_icosahedron(subdivisions=0)
+    vertices, faces = _subdivided_icosahedron(subdivisions=int(params.get("subdivisions", 0)))
     directions = vertices / np.maximum(np.linalg.norm(vertices, axis=1, keepdims=True), 1e-9)
+    directions = _jitter_directions(
+        directions=directions,
+        rng=rng,
+        amount=float(params.get("direction_jitter", 0.0)),
+    )
     radial = _broad_lobed_radius(
         directions=directions,
         faces=faces,
         rng=rng,
         roughness=params["roughness"],
         lobe_count=int(params["lobe_count"]),
+        sigma_range=params.get("lobe_sigma", (0.22, 0.34)),
+        smooth_iterations=int(params.get("radial_smooth_iterations", 1)),
+        smooth_strength=float(params.get("radial_smooth_strength", 0.28)),
     )
     vertices = directions * radial[:, None] * effective_radius * params["scale"]
+    axis_jitter = float(params.get("axis_scale_jitter", 0.0))
+    if axis_jitter > 0.0:
+        axis_scale = rng.uniform(1.0 - axis_jitter, 1.0 + axis_jitter, size=3)
+        axis_scale /= max(float(np.cbrt(np.prod(axis_scale))), 1e-9)
+        vertices *= axis_scale
     vertices = _apply_fracture_planes(
         vertices=vertices,
         rng=rng,
@@ -157,6 +212,15 @@ def generate_fractal_rock(
         count=int(params["chip_count"]),
         depth_range=params["chip_depth"],
     )
+    support_facet_count = int(params.get("support_facet_count", 0))
+    if support_facet_count > 0:
+        vertices = _apply_broad_support_facets(
+            vertices=vertices,
+            rng=rng,
+            count=support_facet_count,
+            quantile=float(params.get("support_facet_quantile", 0.16)),
+            strength=float(params.get("support_facet_strength", 0.92)),
+        )
 
     if kind == "wedge_clast":
         vertices = _apply_wedge(vertices, rng)
@@ -390,6 +454,39 @@ def _kind_params(kind: str, rng: np.random.Generator) -> dict[str, object]:
     raise ValueError(f"Unknown rock kind: {kind}")
 
 
+def _nasa_irregular_params(
+    params: dict[str, object],
+    rng: np.random.Generator,
+    stackable: bool,
+) -> dict[str, object]:
+    updated = dict(params)
+    updated["subdivisions"] = 1
+    if stackable:
+        updated["roughness"] = min(0.245, float(updated["roughness"]) * rng.uniform(1.05, 1.34) + 0.010)
+        updated["lobe_count"] = int(updated["lobe_count"]) + int(rng.integers(1, 4))
+        updated["chip_count"] = int(updated["chip_count"]) + int(rng.integers(1, 3))
+    else:
+        updated["roughness"] = min(0.285, float(updated["roughness"]) * rng.uniform(1.18, 1.55) + 0.018)
+        updated["lobe_count"] = int(updated["lobe_count"]) + int(rng.integers(2, 6))
+        updated["chip_count"] = int(updated["chip_count"]) + int(rng.integers(2, 5))
+    chip_lo, chip_hi = updated["chip_depth"]  # type: ignore[misc]
+    updated["chip_depth"] = (
+        min(0.130, float(chip_lo) * rng.uniform(1.05, 1.22)),
+        min(0.260, float(chip_hi) * rng.uniform(1.10, 1.28) + 0.010),
+    )
+    updated["max_local_excess"] = min(0.160, max(0.130, float(updated["max_local_excess"]) + 0.010))
+    updated["direction_jitter"] = rng.uniform(0.012, 0.030) if stackable else rng.uniform(0.018, 0.045)
+    updated["axis_scale_jitter"] = rng.uniform(0.025, 0.065) if stackable else rng.uniform(0.035, 0.085)
+    updated["lobe_sigma"] = (0.20, 0.33) if stackable else (0.17, 0.30)
+    updated["radial_smooth_iterations"] = 0
+    updated["radial_smooth_strength"] = 0.0
+    if stackable:
+        updated["support_facet_count"] = int(rng.integers(2, 5))
+        updated["support_facet_quantile"] = rng.uniform(0.13, 0.20)
+        updated["support_facet_strength"] = rng.uniform(0.82, 0.96)
+    return updated
+
+
 def _scale_from_ratios(a_over_b: float, b_over_c: float, rng: np.random.Generator) -> np.ndarray:
     c = 1.0
     b = b_over_c * c
@@ -487,18 +584,36 @@ def _broad_lobed_radius(
     rng: np.random.Generator,
     roughness: float,
     lobe_count: int,
+    sigma_range: tuple[float, float] = (0.22, 0.34),
+    smooth_iterations: int = 1,
+    smooth_strength: float = 0.28,
 ) -> np.ndarray:
     anchors = rng.normal(size=(lobe_count, 3))
     anchors /= np.linalg.norm(anchors, axis=1, keepdims=True)
     amplitudes = rng.normal(0.0, roughness, size=lobe_count)
     radial = np.ones(len(directions), dtype=float)
-    sigma = rng.uniform(0.22, 0.34)
+    sigma = rng.uniform(*sigma_range)
     for anchor, amplitude in zip(anchors, amplitudes):
         weights = np.exp(((directions @ anchor) - 1.0) / sigma)
         radial += amplitude * weights
-    radial = _smooth_vertex_values(radial, faces, iterations=1, strength=0.28)
+    if smooth_iterations > 0 and smooth_strength > 0.0:
+        radial = _smooth_vertex_values(radial, faces, iterations=smooth_iterations, strength=smooth_strength)
     radial /= max(float(np.mean(radial)), 1e-9)
     return np.clip(radial, 0.72, 1.34)
+
+
+def _jitter_directions(
+    directions: np.ndarray,
+    rng: np.random.Generator,
+    amount: float,
+) -> np.ndarray:
+    if amount <= 0.0:
+        return directions
+    noise = rng.normal(size=directions.shape)
+    noise -= directions * np.sum(noise * directions, axis=1, keepdims=True)
+    jittered = directions + amount * noise
+    jittered /= np.maximum(np.linalg.norm(jittered, axis=1, keepdims=True), 1e-9)
+    return jittered
 
 
 def _smooth_vertex_values(values: np.ndarray, faces: np.ndarray, iterations: int, strength: float) -> np.ndarray:
@@ -531,6 +646,38 @@ def _apply_fracture_planes(
         t = ((projection[mask] - cutoff) / span)[:, None]
         depth = base_radius * rng.uniform(*depth_range)
         vertices[mask] -= normal * depth * np.clip(t, 0.0, 1.0)
+    return vertices
+
+
+def _apply_broad_support_facets(
+    vertices: np.ndarray,
+    rng: np.random.Generator,
+    count: int,
+    quantile: float,
+    strength: float,
+) -> np.ndarray:
+    vertices = vertices.copy()
+    for index in range(count):
+        if index == 0:
+            normal = np.array([0.0, 0.0, 1.0], dtype=float)
+        elif index == 1:
+            normal = np.array([0.0, 0.0, -1.0], dtype=float)
+        else:
+            normal = rng.normal(size=3)
+            normal /= max(float(np.linalg.norm(normal)), 1e-9)
+        if rng.random() < 0.45:
+            normal = -normal
+        projection = vertices @ normal
+        if rng.random() < 0.5:
+            cutoff = float(np.quantile(projection, np.clip(quantile, 0.05, 0.35)))
+            mask = projection < cutoff
+            if np.any(mask):
+                vertices[mask] += normal * ((cutoff - projection[mask]) * strength)[:, None]
+        else:
+            cutoff = float(np.quantile(projection, np.clip(1.0 - quantile, 0.65, 0.95)))
+            mask = projection > cutoff
+            if np.any(mask):
+                vertices[mask] -= normal * ((projection[mask] - cutoff) * strength)[:, None]
     return vertices
 
 

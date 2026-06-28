@@ -87,6 +87,7 @@ def main() -> int:
         candidate_multiplier=args.candidate_multiplier,
         seed=args.seed,
         mesh_dir=generated_mesh_dir,
+        generator_style=args.generator_style,
         max_spike=args.max_spike,
         max_flatness=args.max_flatness,
         min_short_to_mid=args.min_short_to_mid,
@@ -113,6 +114,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clusters", type=int, default=8)
     parser.add_argument("--generated-count", type=int, default=320)
     parser.add_argument("--candidate-multiplier", type=int, default=14)
+    parser.add_argument(
+        "--generator-style",
+        default="nasa_stackable_irregular",
+        choices=("default", "nasa_irregular", "nasa_stackable_irregular"),
+    )
     parser.add_argument("--test-max-extent-m", type=float, default=0.165)
     parser.add_argument("--max-spike", type=float, default=0.160)
     parser.add_argument("--max-flatness", type=float, default=1.620)
@@ -247,6 +253,7 @@ def generate_nasa_like_training_catalog(
     candidate_multiplier: int,
     seed: int,
     mesh_dir: Path,
+    generator_style: str,
     max_spike: float,
     max_flatness: float,
     min_short_to_mid: float,
@@ -263,14 +270,14 @@ def generate_nasa_like_training_catalog(
         ref = reference_rows[int(rng.integers(0, len(reference_rows)))]
         kind = STRUCTURAL_KINDS[candidate_id % len(STRUCTURAL_KINDS)]
         rock_seed = int(rng.integers(0, 2**31 - 1))
-        vertices, faces = generate_fractal_rock(kind, rock_seed)
+        vertices, faces = generate_fractal_rock(kind, rock_seed, style=generator_style)
         vertices = scale_like_reference(vertices, ref, rng)
         rock = RockMesh(index=candidate_id, kind=kind, vertices=vertices, faces=faces, seed=rock_seed)
         row = extract_features(rock)
         row["reference_sample_id"] = ref["sample_id"]
         row["candidate_id"] = candidate_id
         row["source_policy"] = "TRAINING_ALLOWED_SYNTHETIC_NASA_LIKE_NO_ORIGINAL_GEOMETRY"
-        row["generator_profile"] = "nasa_like_reference_feature_matching_v1"
+        row["generator_profile"] = f"nasa_like_reference_feature_matching_v2_{generator_style}"
         quality = quality_flags(row, max_spike=max_spike, max_flatness=max_flatness, min_short_to_mid=min_short_to_mid)
         row.update(quality)
         if not quality["screen_accept"]:
@@ -487,6 +494,7 @@ def write_readme(
         f"- NASA 原始 test-only 样本数：{len(original_rows)}",
         f"- NASA-like synthetic training 样本数：{len(generated_rows)}",
         f"- seed：{args.seed}",
+        f"- generator style：`{args.generator_style}`",
         f"- test-only 归一化最大外接尺寸：{args.test_max_extent_m:.3f} m",
         f"- synthetic 筛选阈值：spike <= {args.max_spike:.3f}，flatness <= {args.max_flatness:.3f}，short/mid >= {args.min_short_to_mid:.3f}",
         "",
