@@ -5,6 +5,7 @@ import csv
 import json
 import random
 from collections import defaultdict
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
+from scripts.pointnet_modules import PointNetBackbone, parse_channels, transform_regularizer
 from scripts.train_torch_pointnet_rock_encoder import augment_cloud, load_bundle, unique_dir
 
 
@@ -59,21 +61,25 @@ class RoleAffordanceDataset(Dataset):
 
 
 class PointNetRoleAffordance(nn.Module):
-    def __init__(self, input_dim: int, embedding_dim: int, hidden: int, dropout: float) -> None:
+    def __init__(
+        self,
+        input_dim: int,
+        embedding_dim: int,
+        hidden: int,
+        dropout: float,
+        channels: list[int],
+        activation: str,
+        input_transform: bool,
+        feature_transform: bool,
+    ) -> None:
         super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv1d(input_dim, 64, kernel_size=1),
-            nn.BatchNorm1d(64),
-            nn.SiLU(),
-            nn.Conv1d(64, 128, kernel_size=1),
-            nn.BatchNorm1d(128),
-            nn.SiLU(),
-            nn.Conv1d(128, 256, kernel_size=1),
-            nn.BatchNorm1d(256),
-            nn.SiLU(),
-            nn.Conv1d(256, embedding_dim, kernel_size=1),
-            nn.BatchNorm1d(embedding_dim),
-            nn.SiLU(),
+        self.backbone = PointNetBackbone(
+            input_dim=input_dim,
+            embedding_dim=embedding_dim,
+            channels=channels,
+            activation=activation,
+            input_transform=input_transform,
+            feature_transform=feature_transform,
         )
         self.head = nn.Sequential(
             nn.Linear(embedding_dim, hidden),
@@ -84,15 +90,20 @@ class PointNetRoleAffordance(nn.Module):
         )
 
     def forward(self, cloud: torch.Tensor) -> dict[str, torch.Tensor]:
-        x = cloud.transpose(1, 2).contiguous()
-        point_features = self.encoder(x)
-        embedding = torch.max(point_features, dim=2).values
-        return {"embedding": embedding, "logits": self.head(embedding)}
+        backbone_output = self.backbone(cloud)
+        embedding = backbone_output["embedding"]
+        return {
+            "embedding": embedding,
+            "logits": self.head(embedding),
+            "input_transform": backbone_output["input_transform"],
+            "feature_transform": backbone_output["feature_transform"],
+        }
 
 
 def main() -> int:
     args = parse_args()
     set_seed(args.seed)
+    configure_torch_runtime(args)
     output_dir = unique_dir(args.output.resolve())
     output_dir.mkdir(parents=True, exist_ok=False)
 
@@ -107,15 +118,20 @@ def main() -> int:
     all_loader = make_loader(bundle, np.arange(bundle.clouds.shape[0]), args, augment=False, shuffle=False)
 
     device = torch.device(args.device if args.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu"))
+    channels = parse_channels(args.pointnet_channels, args.embedding_dim)
     model = PointNetRoleAffordance(
         input_dim=bundle.clouds.shape[2],
         embedding_dim=args.embedding_dim,
         hidden=args.hidden,
         dropout=args.dropout,
+        channels=channels,
+        activation=args.activation,
+        input_transform=not args.no_input_transform,
+        feature_transform=args.feature_transform,
     ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs, 1))
-    scaler = torch.cuda.amp.GradScaler(enabled=args.amp and device.type == "cuda")
+    scaler = make_grad_scaler(args.amp and device.type == "cuda")
     role_weights = role_weight_tensor(args.role_weight, device)
 
     best_score = -1.0
@@ -139,6 +155,13 @@ def main() -> int:
         if score > best_score:
             best_score = score
             best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+        if args.log_every > 0 and (epoch == 1 or epoch == args.epochs or epoch % args.log_every == 0):
+            print(
+                f"epoch={epoch} train_loss={train_loss:.5f} "
+                f"test_f1={test_metrics['observed_f1']:.4f} "
+                f"test_mae={test_metrics['observed_mae']:.4f}",
+                flush=True,
+            )
 
     if best_state is not None:
         model.load_state_dict(best_state)
@@ -169,6 +192,21 @@ def main() -> int:
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "embedding_dim": args.embedding_dim,
+        "pointnet_channels": channels,
+        "activation": args.activation,
+        "input_transform": bool(not args.no_input_transform),
+        "feature_transform": bool(args.feature_transform),
+        "transform_reg_weight": args.transform_reg_weight,
+        "parameter_count": int(sum(parameter.numel() for parameter in model.parameters())),
+        "architecture_detail": {
+            "name": "PointNetRoleAffordance",
+            "stage": "rock role-affordance predictor for base/middle/cap stone selection",
+            "input": "unordered normalized rock surface points; xyz or xyz+normal",
+            "output": "three logits/probabilities for base, middle, and cap suitability",
+            "shared_mlp_channels": channels,
+            "pooling": "global max pooling over points",
+            "role_head": "Linear(embedding_dim,hidden)-LayerNorm-SiLU-Dropout-Linear(hidden,3)",
+        },
         "hidden": args.hidden,
         "dropout": args.dropout,
         "lr": args.lr,
@@ -185,7 +223,7 @@ def main() -> int:
         "test_observed_mae": test_metrics["observed_mae"],
         "test_by_role": test_metrics["by_role"],
         "all_by_role": all_metrics["by_role"],
-        "purpose": "Predict base/middle/cap role affordance from rock point-cloud geometry only.",
+        "purpose": "Predict base/middle/cap role affordance from 3D PointNet rock point-cloud geometry.",
     }
     torch.save(
         {
@@ -213,6 +251,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--embedding-dim", type=int, default=128)
+    parser.add_argument("--pointnet-channels", default="64,64,128", help="Comma-separated shared-MLP widths before final embedding dim.")
+    parser.add_argument("--activation", choices=["relu", "silu", "gelu"], default="relu")
+    parser.add_argument("--no-input-transform", action="store_true", help="Disable PointNet xyz T-Net canonical alignment.")
+    parser.add_argument("--feature-transform", action="store_true", help="Enable PointNet feature T-Net after the first shared-MLP block.")
+    parser.add_argument("--transform-reg-weight", type=float, default=0.001)
+    parser.add_argument("--torch-threads", type=int, default=0)
+    parser.add_argument("--disable-mkldnn", action="store_true")
+    parser.add_argument("--log-every", type=int, default=5)
     parser.add_argument("--hidden", type=int, default=128)
     parser.add_argument("--dropout", type=float, default=0.25)
     parser.add_argument("--lr", type=float, default=8e-4)
@@ -339,9 +385,18 @@ def train_one_epoch(
         masks = batch["masks"].to(device, non_blocking=True)
         obs_weights = batch["obs_weights"].to(device, non_blocking=True)
         optimizer.zero_grad(set_to_none=True)
-        with torch.cuda.amp.autocast(enabled=args.amp and device.type == "cuda"):
-            logits = model(cloud)["logits"]
+        with autocast_context(args.amp and device.type == "cuda"):
+            output = model(cloud)
+            logits = output["logits"]
             loss = masked_bce_loss(logits, labels, masks, obs_weights, role_weights)
+            reg = torch.zeros((), dtype=loss.dtype, device=loss.device)
+            input_transform = output.get("input_transform")
+            feature_transform = output.get("feature_transform")
+            if input_transform is not None:
+                reg = reg + transform_regularizer(input_transform)
+            if feature_transform is not None:
+                reg = reg + transform_regularizer(feature_transform)
+            loss = loss + args.transform_reg_weight * reg
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
@@ -536,18 +591,55 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def configure_torch_runtime(args: argparse.Namespace) -> None:
+    if args.torch_threads > 0:
+        torch.set_num_threads(args.torch_threads)
+        torch.set_num_interop_threads(max(1, min(args.torch_threads, 4)))
+    if args.disable_mkldnn and hasattr(torch.backends, "mkldnn"):
+        torch.backends.mkldnn.enabled = False
+
+
+def make_grad_scaler(enabled: bool) -> Any:
+    if hasattr(torch, "amp"):
+        return torch.amp.GradScaler("cuda", enabled=enabled)
+    return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
+def autocast_context(enabled: bool) -> Any:
+    if not enabled:
+        return nullcontext()
+    if hasattr(torch, "amp"):
+        return torch.amp.autocast("cuda", enabled=True)
+    return torch.cuda.amp.autocast(enabled=True)
+
+
 def write_readme(output_dir: Path, metrics: dict[str, Any]) -> None:
     lines = [
         "# PointNet Role-Affordance",
         "",
-        "Purpose: predict whether a rock shape is suitable for base, middle, or cap positions using only point-cloud geometry.",
+        "Purpose: predict whether a rock shape is suitable for base, middle, or cap positions using 3D PointNet point-cloud geometry.",
         "",
         "This is an offline stone-selection candidate. It should not be used alone for closed-loop stacking because it does not observe the current wall state.",
+        "",
+        "Architecture:",
+        "",
+        "- Input: normalized rock surface point cloud, optionally xyz+normal.",
+        "- PointNet xyz T-Net canonical alignment unless disabled.",
+        "- Shared 1x1 point MLP with channels recorded below.",
+        "- Optional feature T-Net with orthogonality regularization.",
+        "- Symmetric max pooling to a global rock embedding.",
+        "- MLP role head for base/middle/cap affordance probabilities.",
         "",
         f"- pointcloud dir: `{metrics['pointcloud_dir']}`",
         f"- dataset: `{metrics['dataset']}`",
         f"- rocks: `{metrics['rock_count']}`",
         f"- labeled rocks: `{metrics['labeled_rock_count']}`",
+        f"- point count: `{metrics['point_count']}`",
+        f"- input dim: `{metrics['input_dim']}`",
+        f"- PointNet channels: `{metrics['pointnet_channels']}`",
+        f"- embedding dim: `{metrics['embedding_dim']}`",
+        f"- input transform: `{metrics['input_transform']}`",
+        f"- feature transform: `{metrics['feature_transform']}`",
         f"- device: `{metrics['device']}`",
         f"- test observed accuracy: `{metrics['test_observed_accuracy']:.3f}`",
         f"- test observed F1: `{metrics['test_observed_f1']:.3f}`",

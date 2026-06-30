@@ -4253,12 +4253,51 @@ def _mlp_binary_prob(model: dict[str, Any], row: dict[str, Any]) -> float | None
     std = np.asarray(schema.get("feature_std", [1.0] * x.shape[1]), dtype=np.float64).reshape(1, -1)
     if mean.shape[1] != x.shape[1] or std.shape[1] != x.shape[1]:
         return None
-    if not {"w1", "b1", "w2", "b2"}.issubset(model):
+    layer_count = _mlp_layer_count(model)
+    if layer_count < 2:
         return None
     x = (x - mean) / np.where(std < 1e-6, 1.0, std)
-    hidden = np.maximum(np.einsum("ij,jk->ik", x, model["w1"], optimize=False) + model["b1"], 0.0)
-    logits = np.einsum("ij,jk->ik", hidden, model["w2"], optimize=False) + model["b2"]
+    values = x
+    activation = _mlp_activation(model)
+    for index in range(1, layer_count + 1):
+        weight_key = f"w{index}"
+        bias_key = f"b{index}"
+        if weight_key not in model or bias_key not in model:
+            return None
+        values = np.einsum("ij,jk->ik", values, model[weight_key], optimize=False) + model[bias_key]
+        if index < layer_count:
+            values = _mlp_activation_array(values, activation)
+    logits = values
     return float(1.0 / (1.0 + np.exp(-np.clip(logits[0, 0], -40.0, 40.0))))
+
+
+def _mlp_layer_count(model: dict[str, Any]) -> int:
+    if "layer_count" in model:
+        try:
+            return int(np.asarray(model["layer_count"]).reshape(-1)[0])
+        except (TypeError, ValueError, IndexError):
+            return 0
+    if {"w1", "b1", "w2", "b2"}.issubset(model):
+        return 2
+    return 0
+
+
+def _mlp_activation(model: dict[str, Any]) -> str:
+    if "activation" not in model:
+        return "relu"
+    try:
+        activation = str(np.asarray(model["activation"]).reshape(-1)[0])
+    except (TypeError, ValueError, IndexError):
+        return "relu"
+    return activation if activation in {"relu", "silu", "gelu"} else "relu"
+
+
+def _mlp_activation_array(x: np.ndarray, activation: str) -> np.ndarray:
+    if activation == "silu":
+        return x / (1.0 + np.exp(-np.clip(x, -40.0, 40.0)))
+    if activation == "gelu":
+        return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * np.power(x, 3))))
+    return np.maximum(x, 0.0)
 
 
 def _torch_support_map_ranker_score(

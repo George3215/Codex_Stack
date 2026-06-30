@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import random
+from contextlib import nullcontext
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,6 +19,8 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
+
+from scripts.pointnet_modules import PointNetBackbone, parse_channels, transform_regularizer
 
 
 @dataclass
@@ -56,21 +59,26 @@ class RockCloudDataset(Dataset):
 
 
 class PointNetRockEncoder(nn.Module):
-    def __init__(self, input_dim: int, embedding_dim: int, source_classes: int, cluster_classes: int, dropout: float) -> None:
+    def __init__(
+        self,
+        input_dim: int,
+        embedding_dim: int,
+        source_classes: int,
+        cluster_classes: int,
+        dropout: float,
+        channels: list[int],
+        activation: str,
+        input_transform: bool,
+        feature_transform: bool,
+    ) -> None:
         super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv1d(input_dim, 64, kernel_size=1),
-            nn.BatchNorm1d(64),
-            nn.ReLU(inplace=True),
-            nn.Conv1d(64, 128, kernel_size=1),
-            nn.BatchNorm1d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv1d(128, 256, kernel_size=1),
-            nn.BatchNorm1d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv1d(256, embedding_dim, kernel_size=1),
-            nn.BatchNorm1d(embedding_dim),
-            nn.ReLU(inplace=True),
+        self.backbone = PointNetBackbone(
+            input_dim=input_dim,
+            embedding_dim=embedding_dim,
+            channels=channels,
+            activation=activation,
+            input_transform=input_transform,
+            feature_transform=feature_transform,
         )
         self.source_head = nn.Sequential(
             nn.Linear(embedding_dim, 256),
@@ -86,19 +94,21 @@ class PointNetRockEncoder(nn.Module):
         )
 
     def forward(self, cloud: torch.Tensor) -> dict[str, torch.Tensor]:
-        x = cloud.transpose(1, 2).contiguous()
-        point_features = self.encoder(x)
-        embedding = torch.max(point_features, dim=2).values
+        backbone_output = self.backbone(cloud)
+        embedding = backbone_output["embedding"]
         return {
             "embedding": embedding,
             "source_logits": self.source_head(embedding),
             "cluster_logits": self.cluster_head(embedding),
+            "input_transform": backbone_output["input_transform"],
+            "feature_transform": backbone_output["feature_transform"],
         }
 
 
 def main() -> int:
     args = parse_args()
     set_seed(args.seed)
+    configure_torch_runtime(args)
     pointcloud_dir = args.pointcloud_dir.resolve()
     output_dir = unique_dir(args.output.resolve())
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -111,16 +121,21 @@ def main() -> int:
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 
     device = torch.device(args.device if args.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu"))
+    channels = parse_channels(args.pointnet_channels, args.embedding_dim)
     model = PointNetRockEncoder(
         input_dim=bundle.clouds.shape[2],
         embedding_dim=args.embedding_dim,
         source_classes=len(bundle.source_classes),
         cluster_classes=len(bundle.cluster_classes),
         dropout=args.dropout,
+        channels=channels,
+        activation=args.activation,
+        input_transform=not args.no_input_transform,
+        feature_transform=args.feature_transform,
     ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs, 1))
-    scaler = torch.cuda.amp.GradScaler(enabled=args.amp and device.type == "cuda")
+    scaler = make_grad_scaler(args.amp and device.type == "cuda")
 
     history: list[dict[str, float]] = []
     best_score = -1.0
@@ -144,6 +159,13 @@ def main() -> int:
         if score > best_score:
             best_score = score
             best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+        if args.log_every > 0 and (epoch == 1 or epoch == args.epochs or epoch % args.log_every == 0):
+            print(
+                f"epoch={epoch} train_loss={train_metrics['loss']:.5f} "
+                f"test_source_acc={test_metrics['source_accuracy']:.4f} "
+                f"test_cluster_acc={test_metrics['cluster_accuracy']:.4f}",
+                flush=True,
+            )
 
     if best_state is not None:
         model.load_state_dict(best_state)
@@ -165,6 +187,22 @@ def main() -> int:
         "point_count": int(bundle.clouds.shape[1]),
         "input_dim": int(bundle.clouds.shape[2]),
         "embedding_dim": args.embedding_dim,
+        "pointnet_channels": channels,
+        "activation": args.activation,
+        "input_transform": bool(not args.no_input_transform),
+        "feature_transform": bool(args.feature_transform),
+        "transform_reg_weight": args.transform_reg_weight,
+        "parameter_count": int(sum(parameter.numel() for parameter in model.parameters())),
+        "architecture_detail": {
+            "name": "PointNetRockEncoder",
+            "stage": "point-cloud geometry encoder for replacing hand-written rock geometry scalars",
+            "input": "unordered normalized rock surface points; xyz or xyz+normal",
+            "output": "global rock embedding plus source-kind and cluster-family logits",
+            "shared_mlp_channels": channels,
+            "pooling": "global max pooling over points",
+            "source_head": "Linear(embedding_dim,256)-ReLU-Dropout-Linear(256,source_classes)",
+            "cluster_head": "Linear(embedding_dim,256)-ReLU-Dropout-Linear(256,cluster_classes)",
+        },
         "source_classes": bundle.source_classes,
         "cluster_classes": bundle.cluster_classes,
         "source_class_counts": dict(Counter(bundle.source_kind.tolist())),
@@ -184,7 +222,7 @@ def main() -> int:
         "test_source_accuracy": test_metrics["source_accuracy"],
         "test_cluster_accuracy": test_metrics["cluster_accuracy"],
         "embedding_path": str(embedding_path),
-        "architecture": "PointNet-style shared MLP over point cloud plus global max pooling and multi-task classification heads.",
+        "architecture": "3D PointNet: optional xyz T-Net, shared 1x1 MLP over unordered point samples, optional feature T-Net, global max pooling, and multi-task classification heads.",
     }
 
     torch.save(
@@ -209,6 +247,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--embedding-dim", type=int, default=256)
+    parser.add_argument("--pointnet-channels", default="64,64,128", help="Comma-separated shared-MLP widths before final embedding dim.")
+    parser.add_argument("--activation", choices=["relu", "silu", "gelu"], default="relu")
+    parser.add_argument("--no-input-transform", action="store_true", help="Disable PointNet xyz T-Net canonical alignment.")
+    parser.add_argument("--feature-transform", action="store_true", help="Enable PointNet feature T-Net after the first shared-MLP block.")
+    parser.add_argument("--transform-reg-weight", type=float, default=0.001)
+    parser.add_argument("--torch-threads", type=int, default=0)
+    parser.add_argument("--disable-mkldnn", action="store_true")
+    parser.add_argument("--log-every", type=int, default=5)
     parser.add_argument("--dropout", type=float, default=0.25)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
@@ -314,11 +360,19 @@ def train_epoch(
         source_label = batch["source_label"].to(device, non_blocking=True)
         cluster_label = batch["cluster_label"].to(device, non_blocking=True)
         optimizer.zero_grad(set_to_none=True)
-        with torch.cuda.amp.autocast(enabled=args.amp and device.type == "cuda"):
+        with autocast_context(args.amp and device.type == "cuda"):
             output = model(cloud)
             source_loss = nn.functional.cross_entropy(output["source_logits"], source_label)
             cluster_loss = nn.functional.cross_entropy(output["cluster_logits"], cluster_label)
             loss = 0.4 * source_loss + 0.6 * cluster_loss
+            reg = torch.zeros((), dtype=loss.dtype, device=loss.device)
+            input_transform = output.get("input_transform")
+            feature_transform = output.get("feature_transform")
+            if input_transform is not None:
+                reg = reg + transform_regularizer(input_transform)
+            if feature_transform is not None:
+                reg = reg + transform_regularizer(feature_transform)
+            loss = loss + args.transform_reg_weight * reg
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
@@ -418,6 +472,28 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def configure_torch_runtime(args: argparse.Namespace) -> None:
+    if args.torch_threads > 0:
+        torch.set_num_threads(args.torch_threads)
+        torch.set_num_interop_threads(max(1, min(args.torch_threads, 4)))
+    if args.disable_mkldnn and hasattr(torch.backends, "mkldnn"):
+        torch.backends.mkldnn.enabled = False
+
+
+def make_grad_scaler(enabled: bool) -> Any:
+    if hasattr(torch, "amp"):
+        return torch.amp.GradScaler("cuda", enabled=enabled)
+    return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
+def autocast_context(enabled: bool) -> Any:
+    if not enabled:
+        return nullcontext()
+    if hasattr(torch, "amp"):
+        return torch.amp.autocast("cuda", enabled=True)
+    return torch.cuda.amp.autocast(enabled=True)
+
+
 def write_readme(output_dir: Path, metrics: dict[str, Any]) -> None:
     lines = [
         "# PyTorch PointNet Rock Encoder",
@@ -426,8 +502,11 @@ def write_readme(output_dir: Path, metrics: dict[str, Any]) -> None:
         "",
         "Architecture:",
         "",
-        "- PointNet-style shared 1x1 MLP over point samples.",
-        "- Global max pooling for permutation-invariant rock embedding.",
+        "- Input: normalized rock surface point cloud, optionally xyz+normal.",
+        "- PointNet xyz T-Net canonical alignment unless disabled.",
+        "- Shared 1x1 point MLP with channels recorded below.",
+        "- Optional feature T-Net with orthogonality regularization.",
+        "- Symmetric max pooling for permutation-invariant rock embedding.",
         "- Multi-task heads for generated source kind and cluster label.",
         "",
         f"- point-cloud dir: `{metrics['pointcloud_dir']}`",
@@ -436,7 +515,11 @@ def write_readme(output_dir: Path, metrics: dict[str, Any]) -> None:
         f"- GPU: {metrics['gpu_name']}",
         f"- rocks: {metrics['rock_count']}",
         f"- points per rock: {metrics['point_count']}",
+        f"- input dim: {metrics['input_dim']}",
+        f"- PointNet channels: {metrics['pointnet_channels']}",
         f"- embedding dim: {metrics['embedding_dim']}",
+        f"- input transform: {metrics['input_transform']}",
+        f"- feature transform: {metrics['feature_transform']}",
         f"- test source-kind accuracy: {metrics['test_source_accuracy']:.3f}",
         f"- test cluster-label accuracy: {metrics['test_cluster_accuracy']:.3f}",
         "",

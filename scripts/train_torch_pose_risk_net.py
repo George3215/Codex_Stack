@@ -114,12 +114,27 @@ def main() -> int:
         "positive_count": int(sum(risk_label(row, args) for row in rows)),
         "numeric_columns": NUMERIC_COLUMNS,
         "categorical_columns": CATEGORICAL_COLUMNS,
+        "input_dim": int(x_train.shape[1]),
+        "output_dim": 1,
+        "linear_layer_count": int(len(hidden_layers(args)) + 1),
+        "parameter_count": mlp_parameter_count(int(x_train.shape[1]), hidden_layers(args), 1),
+        "architecture_detail": {
+            "name": "PoseRiskNet",
+            "stage": "transition MLP from candidate pose heuristic scoring toward learned risk filtering",
+            "input": "known pre-placement gravity, target, candidate pose, and rock geometry/category features",
+            "output": "probability that a candidate pose is safe enough before committing the stone",
+            "hidden_layers": hidden_layers(args),
+            "activation": args.activation,
+            "dropout": args.dropout,
+        },
         "train": train_metrics,
         "test": test_metrics,
         "test_group": group_metrics,
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "hidden": args.hidden,
+        "hidden_layers": hidden_layers(args),
+        "activation": args.activation,
         "lr": args.lr,
         "weight_decay": args.weight_decay,
         "history": history,
@@ -141,6 +156,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--hidden", type=int, default=128)
+    parser.add_argument(
+        "--hidden-layers",
+        default="",
+        help="Comma-separated hidden layer widths. Default uses hidden, hidden/2, hidden/4.",
+    )
+    parser.add_argument("--activation", choices=["relu", "silu", "gelu"], default="silu")
     parser.add_argument("--dropout", type=float, default=0.14)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=2e-4)
@@ -305,12 +326,7 @@ def train_model(x: np.ndarray, y: np.ndarray, args: argparse.Namespace) -> tuple
     from torch import nn
 
     device = choose_device(torch, args.device)
-    model = nn.Sequential(
-        nn.Linear(x.shape[1], args.hidden),
-        nn.ReLU(),
-        nn.Dropout(args.dropout),
-        nn.Linear(args.hidden, 1),
-    ).to(device)
+    model = make_mlp(nn, x.shape[1], hidden_layers(args), args.dropout, args.activation).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     positives = float(np.sum(y >= 0.5))
     negatives = float(np.sum(y < 0.5))
@@ -332,15 +348,66 @@ def train_model(x: np.ndarray, y: np.ndarray, args: argparse.Namespace) -> tuple
             losses.append(float(loss.detach().cpu()))
         if epoch == 1 or epoch == args.epochs or epoch % max(1, args.epochs // 10) == 0:
             history.append({"epoch": epoch, "loss": float(np.mean(losses))})
-    first: nn.Linear = model[0]  # type: ignore[assignment]
-    second: nn.Linear = model[3]  # type: ignore[assignment]
-    exported = {
-        "w1": first.weight.detach().cpu().numpy().T.astype(np.float64),
-        "b1": first.bias.detach().cpu().numpy().reshape(1, -1).astype(np.float64),
-        "w2": second.weight.detach().cpu().numpy().T.astype(np.float64),
-        "b2": second.bias.detach().cpu().numpy().reshape(1, -1).astype(np.float64),
+    return export_mlp(model, nn, args.activation), history
+
+
+def hidden_layers(args: argparse.Namespace) -> list[int]:
+    if args.hidden_layers.strip():
+        output: list[int] = []
+        for item in args.hidden_layers.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            value = int(item)
+            if value <= 0:
+                raise SystemExit(f"Invalid hidden layer width: {item}")
+            output.append(value)
+        if output:
+            return output
+    first = int(args.hidden)
+    return [first, max(first // 2, 64), max(first // 4, 32)]
+
+
+def mlp_parameter_count(input_dim: int, layers: list[int], output_dim: int = 1) -> int:
+    total = 0
+    previous = int(input_dim)
+    for width in layers + [int(output_dim)]:
+        total += previous * int(width) + int(width)
+        previous = int(width)
+    return int(total)
+
+
+def make_mlp(nn: Any, input_dim: int, layers: list[int], dropout: float, activation: str) -> Any:
+    modules: list[Any] = []
+    previous = input_dim
+    for width in layers:
+        modules.append(nn.Linear(previous, width))
+        modules.append(make_activation(nn, activation))
+        if dropout > 0.0:
+            modules.append(nn.Dropout(dropout))
+        previous = width
+    modules.append(nn.Linear(previous, 1))
+    return nn.Sequential(*modules)
+
+
+def make_activation(nn: Any, activation: str) -> Any:
+    if activation == "relu":
+        return nn.ReLU()
+    if activation == "gelu":
+        return nn.GELU()
+    return nn.SiLU()
+
+
+def export_mlp(model: Any, nn: Any, activation: str) -> dict[str, np.ndarray]:
+    linear_layers = [module for module in model if isinstance(module, nn.Linear)]
+    output: dict[str, np.ndarray] = {
+        "layer_count": np.asarray([len(linear_layers)], dtype=np.int64),
+        "activation": np.asarray([activation]),
     }
-    return exported, history
+    for index, layer in enumerate(linear_layers, start=1):
+        output[f"w{index}"] = layer.weight.detach().cpu().numpy().T.astype(np.float64)
+        output[f"b{index}"] = layer.bias.detach().cpu().numpy().reshape(1, -1).astype(np.float64)
+    return output
 
 
 def choose_device(torch: Any, requested: str) -> Any:
@@ -370,24 +437,53 @@ def predict_torch_cpu(model: dict[str, np.ndarray], x: np.ndarray) -> np.ndarray
     import torch
 
     device = torch.device("cpu")
-    w1 = torch.from_numpy(model["w1"].astype(np.float32, copy=False)).to(device)
-    b1 = torch.from_numpy(model["b1"].astype(np.float32, copy=False)).to(device)
-    w2 = torch.from_numpy(model["w2"].astype(np.float32, copy=False)).to(device)
-    b2 = torch.from_numpy(model["b2"].astype(np.float32, copy=False)).to(device)
+    layer_count = int(np.asarray(model.get("layer_count", [2])).reshape(-1)[0])
+    activation = str(np.asarray(model.get("activation", ["relu"])).reshape(-1)[0])
+    weights = [
+        torch.from_numpy(model[f"w{index}"].astype(np.float32, copy=False)).to(device)
+        for index in range(1, layer_count + 1)
+    ]
+    biases = [
+        torch.from_numpy(model[f"b{index}"].astype(np.float32, copy=False)).to(device)
+        for index in range(1, layer_count + 1)
+    ]
     outputs = []
     with torch.no_grad():
         for start in range(0, len(x), 1024):
-            batch = torch.from_numpy(x[start : start + 1024].astype(np.float32, copy=False)).to(device)
-            hidden = torch.relu(batch @ w1 + b1)
-            logits = hidden @ w2 + b2
-            outputs.append(torch.sigmoid(logits).cpu().numpy().astype(np.float64))
+            values = torch.from_numpy(x[start : start + 1024].astype(np.float32, copy=False)).to(device)
+            for index, (weight, bias) in enumerate(zip(weights, biases), start=1):
+                values = values @ weight + bias
+                if index < layer_count:
+                    values = apply_activation_torch(torch, values, activation)
+            outputs.append(torch.sigmoid(values).cpu().numpy().astype(np.float64))
     return np.vstack(outputs)
 
 
 def predict_chunk(model: dict[str, np.ndarray], x: np.ndarray) -> np.ndarray:
-    hidden = np.maximum(np.einsum("ij,jk->ik", x, model["w1"], optimize=False) + model["b1"], 0.0)
-    logits = np.einsum("ij,jk->ik", hidden, model["w2"], optimize=False) + model["b2"]
-    return sigmoid(logits)
+    values = x
+    layer_count = int(np.asarray(model.get("layer_count", [2])).reshape(-1)[0])
+    activation = str(np.asarray(model.get("activation", ["relu"])).reshape(-1)[0])
+    for index in range(1, layer_count + 1):
+        values = np.einsum("ij,jk->ik", values, model[f"w{index}"], optimize=False) + model[f"b{index}"]
+        if index < layer_count:
+            values = apply_activation(values, activation)
+    return sigmoid(values)
+
+
+def apply_activation_torch(torch: Any, x: Any, activation: str) -> Any:
+    if activation == "silu":
+        return torch.nn.functional.silu(x)
+    if activation == "gelu":
+        return torch.nn.functional.gelu(x)
+    return torch.relu(x)
+
+
+def apply_activation(x: np.ndarray, activation: str) -> np.ndarray:
+    if activation == "silu":
+        return x / (1.0 + np.exp(-np.clip(x, -40.0, 40.0)))
+    if activation == "gelu":
+        return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * np.power(x, 3))))
+    return np.maximum(x, 0.0)
 
 
 def sigmoid(x: np.ndarray) -> np.ndarray:
@@ -495,6 +591,8 @@ def write_readme(output_dir: Path, metrics: dict[str, Any]) -> None:
         f"- test f1: {metrics['test']['f1']:.3f}",
         f"- test top1 safe: {metrics['test_group']['top1_safe_rate']:.3f}",
         f"- test top3 safe: {metrics['test_group']['top3_safe_rate']:.3f}",
+        f"- hidden layers: {metrics['hidden_layers']}",
+        f"- activation: {metrics['activation']}",
         "",
         "Input excludes post-simulation fields; risk labels are made from committed success, target error, drift, and velocity.",
     ]

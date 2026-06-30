@@ -1,0 +1,9 @@
+model,dataset,row_count,input_dim,hidden_layers,activation,parameter_count,test_accuracy,test_precision,test_recall,test_f1,group_metric_1,group_metric_1_name,group_metric_2,group_metric_2_name,decision
+StoneSlotNet,20260630_positive_mining_3course_moon_v1_learning_dataset,13599,98,"512/256/128",SiLU,215041,0.7966,0.1210,0.2209,0.1564,0.2292,top1_hit_rate,0.3750,top3_hit_rate,baseline_keep_as_stone_prefilter
+PoseRiskNet,20260630_positive_mining_3course_moon_v1_learning_dataset,44700,122,"640/320/160",SiLU,335361,0.7037,0.8172,0.7914,0.8041,0.6879,top1_safe_rate,1.0000,top3_safe_rate,small_3course_reference
+StoneSlotNet,20260630_enriched_recent_wall_failure_mechanisms_v1,25831,113,"768/384/192",SiLU,456961,0.8199,0.0717,0.1525,0.0976,0.1737,top1_hit_rate,0.3174,top3_hit_rate,not_better_than_baseline
+PoseRiskNet,20260630_enriched_recent_wall_failure_mechanisms_v1,118570,135,"768/384/192",SiLU,473857,0.7734,0.8488,0.8531,0.8509,0.6273,top1_safe_rate,0.8892,top3_safe_rate,useful_general_recent_model
+StoneSlotNet,20260630_all_history_enriched_failure_mechanisms_v1,41354,115,"1024/512/256/128",SiLU,807937,0.8271,0.0896,0.2454,0.1313,0.1371,top1_hit_rate,0.3091,top3_hit_rate,all_history_noise_bad_for_stone_selection
+PoseRiskNet,20260630_all_history_enriched_failure_mechanisms_v1,235664,140,"1024/512/256/128",SiLU,833537,0.7774,0.8817,0.8435,0.8622,0.5923,top1_safe_rate,0.8641,top3_safe_rate,all_history_noise_bad_for_pose_risk
+StoneSlotNet,20260630_clean_policy_moon_wall_3to4_strict_v1,20109,108,"768/384/192/96",SiLU,471553,0.7712,0.0714,0.2563,0.1116,0.0853,top1_hit_rate,0.2558,top3_hit_rate,do_not_use_for_stone_selection
+PoseRiskNet,20260630_clean_policy_moon_wall_3to4_strict_v1,35779,126,"768/384/192/96",SiLU,485377,0.6954,0.7911,0.8132,0.8020,0.6579,top1_safe_rate,0.9786,top3_safe_rate,use_for_4course_pose_risk_probe

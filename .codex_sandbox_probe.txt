@@ -1,0 +1,1 @@
+This file was created by Codex on 2026-06-29 while testing whether direct patching worked after both PowerShell and node_repl failed with sandbox setup refresh errors. It is not part of the snapshot workflow and can be ignored or removed later if you choose.

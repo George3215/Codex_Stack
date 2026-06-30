@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="610" viewBox="0 0 1100 610">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="550.0" y="28.0" font-size="18" font-family="Arial, sans-serif" font-weight="700" fill="#111827" text-anchor="middle">Dataset volume, log10 rows</text>
+<rect x="76" y="54" width="804" height="406" fill="#f9fafb" stroke="#d1d5db"/>
+<line x1="76" y1="460.0" x2="880" y2="460.0" stroke="#e5e7eb"/>
+<text x="66.0" y="464.0" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">0.00</text>
+<line x1="76" y1="378.8" x2="880" y2="378.8" stroke="#e5e7eb"/>
+<text x="66.0" y="382.8" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">1.11</text>
+<line x1="76" y1="297.6" x2="880" y2="297.6" stroke="#e5e7eb"/>
+<text x="66.0" y="301.6" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">2.23</text>
+<line x1="76" y1="216.4" x2="880" y2="216.4" stroke="#e5e7eb"/>
+<text x="66.0" y="220.4" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">3.34</text>
+<line x1="76" y1="135.2" x2="880" y2="135.2" stroke="#e5e7eb"/>
+<text x="66.0" y="139.2" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">4.45</text>
+<line x1="76" y1="54.0" x2="880" y2="54.0" stroke="#e5e7eb"/>
+<text x="66.0" y="58.0" font-size="11" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="end">5.56</text>
+<text x="20" y="257.0" font-size="12" fill="#374151" text-anchor="middle" transform="rotate(-90 20,257.0)">value</text>
+<line x1="76" y1="460.0" x2="880" y2="460.0" stroke="#111827" stroke-width="1"/>
+<rect x="83.8" y="247.9" width="19.3" height="212.1" fill="#2563eb"/>
+<rect x="164.2" y="247.9" width="19.3" height="212.1" fill="#2563eb"/>
+<rect x="244.6" y="247.9" width="19.3" height="212.1" fill="#2563eb"/>
+<rect x="325.0" y="247.9" width="19.3" height="212.1" fill="#2563eb"/>
+<rect x="405.4" y="247.9" width="19.3" height="212.1" fill="#2563eb"/>
+<rect x="485.8" y="247.9" width="19.3" height="212.1" fill="#2563eb"/>
+<rect x="566.2" y="247.9" width="19.3" height="212.1" fill="#2563eb"/>
+<rect x="646.6" y="211.9" width="19.3" height="248.1" fill="#2563eb"/>
+<rect x="727.0" y="213.8" width="19.3" height="246.2" fill="#2563eb"/>
+<rect x="807.4" y="213.8" width="19.3" height="246.2" fill="#2563eb"/>
+<rect x="106.6" y="142.9" width="19.3" height="317.1" fill="#16a34a"/>
+<rect x="187.0" y="142.9" width="19.3" height="317.1" fill="#16a34a"/>
+<rect x="267.4" y="142.9" width="19.3" height="317.1" fill="#16a34a"/>
+<rect x="347.8" y="142.9" width="19.3" height="317.1" fill="#16a34a"/>
+<rect x="428.2" y="142.9" width="19.3" height="317.1" fill="#16a34a"/>
+<rect x="508.6" y="142.9" width="19.3" height="317.1" fill="#16a34a"/>
+<rect x="589.0" y="142.9" width="19.3" height="317.1" fill="#16a34a"/>
+<rect x="669.4" y="84.1" width="19.3" height="375.9" fill="#16a34a"/>
+<rect x="749.8" y="89.0" width="19.3" height="371.0" fill="#16a34a"/>
+<rect x="830.2" y="89.0" width="19.3" height="371.0" fill="#16a34a"/>
+<rect x="129.3" y="181.8" width="19.3" height="278.2" fill="#f59e0b"/>
+<rect x="209.7" y="181.8" width="19.3" height="278.2" fill="#f59e0b"/>
+<rect x="290.1" y="181.8" width="19.3" height="278.2" fill="#f59e0b"/>
+<rect x="370.5" y="181.8" width="19.3" height="278.2" fill="#f59e0b"/>
+<rect x="450.9" y="181.8" width="19.3" height="278.2" fill="#f59e0b"/>
+<rect x="531.3" y="181.8" width="19.3" height="278.2" fill="#f59e0b"/>
+<rect x="611.7" y="181.8" width="19.3" height="278.2" fill="#f59e0b"/>
+<rect x="692.1" y="135.4" width="19.3" height="324.6" fill="#f59e0b"/>
+<rect x="772.5" y="136.3" width="19.3" height="323.7" fill="#f59e0b"/>
+<rect x="852.9" y="136.3" width="19.3" height="323.7" fill="#f59e0b"/>
+<text x="116.2" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 116.2,498)">20260622_autonomous_wall_flywheel_</text>
+<text x="196.6" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 196.6,498)">20260622_autonomous_wall_flywheel_</text>
+<text x="277.0" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 277.0,498)">20260622_autonomous_wall_flywheel_</text>
+<text x="357.4" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 357.4,498)">20260622_autonomous_wall_flywheel_</text>
+<text x="437.8" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 437.8,498)">20260622_autonomous_wall_flywheel_</text>
+<text x="518.2" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 518.2,498)">20260626_low_release_wall_master_v</text>
+<text x="598.6" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 598.6,498)">20260626_low_release_wall_master_v</text>
+<text x="679.0" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 679.0,498)">20260626_policy_replacement_datase</text>
+<text x="759.4" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 759.4,498)">20260626_clean_policy_wall34_datas</text>
+<text x="839.8" y="498" font-size="11" fill="#374151" text-anchor="end" transform="rotate(-36 839.8,498)">20260626_clean_policy_wall34_datas</text>
+<rect x="908" y="66" width="14" height="14" fill="#2563eb"/>
+<text x="930.0" y="77.0" font-size="12" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="start">placement log10</text>
+<rect x="908" y="90" width="14" height="14" fill="#16a34a"/>
+<text x="930.0" y="101.0" font-size="12" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="start">candidate log10</text>
+<rect x="908" y="114" width="14" height="14" fill="#f59e0b"/>
+<text x="930.0" y="125.0" font-size="12" font-family="Arial, sans-serif" font-weight="400" fill="#111827" text-anchor="start">assignment log10</text>
+</svg>
