@@ -1,0 +1,5 @@
+model,dataset,row_count,input_dim,hidden_layers,parameter_count,test_accuracy,test_precision,test_recall,test_f1,group_top1,group_top3,decision
+controller_only_pose_risk,20260701_controller_next_3course_clean_policy_v1,6378,110,"512/256/128",221185,0.5931,0.6685,0.6685,0.6685,0.6998,1.0,"good within controller distribution; too few runs for promotion"
+clean_3to4_plus_controller_pose_risk,20260701_clean_policy_moon_wall_3to4_plus_controller_v1,42157,127,"768/384/192/96",486145,0.6346,0.7845,0.6904,0.7345,0.6232,0.9567,"trained successfully; not clearly better than previous clean 3-4 PoseRiskNet"
+previous_clean_3to4_pose_risk,20260630_clean_policy_moon_wall_3to4_strict_v1,35779,126,"768/384/192/96",485377,0.6954,0.7911,0.8132,0.8020,0.6579,0.9786,"still best clean 3-4 PoseRiskNet by held-out group metrics"
+previous_support_map_ranker,20260630_data_flywheel_controller_v1_support_maps,6744,82,"CNN+MLP hidden384",181537,NA,NA,NA,NA,0.4144,1.0,"baseline support-map ranker; increment job running"

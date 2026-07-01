@@ -1,0 +1,7 @@
+line,trials,success_trials,shape_success_trials,placement_rows,candidate_pose_rows,failure_rows,success_rate,shape_success_rate,candidate_pose_per_success,placement_per_success,notes
+deepmlp_exploit_v2,9,1,1,135,11340,29,0.1111,0.1111,11340,135,"negative-rich; useful for failure learning but poor positive mining"
+success_harvest_v1,1,0,0,15,3300,1,0,0,NA,NA,"still running; no successful completed trial at snapshot time"
+controller_next_3course_snapshot,8,4,5,120,8640,12,0.5,0.625,2160,30,"best current 3-course positive data source"
+overnight_raw_total,18,5,6,270,23280,42,0.2778,0.3333,4656,54,"completed raw trials from overnight run dirs"
+controller_clean_policy,8,4,5,95,6378,NA,0.5,0.625,1594.5,23.75,"after metric cleaning; 25 placements and 2262 candidate poses filtered as outliers"
+clean_3to4_plus_controller,65,15,17,1015,42157,NA,0.2308,0.2615,2810.5,67.7,"merged clean 3-4 dataset plus controller clean snapshot"
