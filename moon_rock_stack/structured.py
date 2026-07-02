@@ -849,6 +849,7 @@ def run_structured_trial_detailed(
     pose_risk_ranker_max_course: int = -1,
     stone_fit_ranker: dict[str, Any] | None = None,
     stone_fit_top_k: int = 0,
+    stone_physical_top_k: int = 0,
     stone_fit_ranker_max_course: int = -1,
     state_snapshots: list[dict[str, Any]] | None = None,
     commit_best_rejected: bool = False,
@@ -994,6 +995,7 @@ def run_structured_trial_detailed(
                 pose_risk_weight=slot_pose_risk_weight,
                 stone_fit_ranker=slot_stone_fit_ranker,
                 stone_fit_top_k=slot_stone_fit_top_k,
+                stone_physical_top_k=stone_physical_top_k,
                 commit_best_rejected=commit_best_rejected,
                 candidate_probe_steps=effective_candidate_probe_steps,
                 candidate_probe_hard_gate=candidate_probe_hard_gate,
@@ -1437,6 +1439,7 @@ def run_structured_trial_detailed(
         "pose_risk_ranker_max_course": int(pose_risk_ranker_max_course),
         "stone_fit_ranker_used": int(stone_fit_ranker is not None),
         "stone_fit_top_k": int(stone_fit_top_k),
+        "stone_physical_top_k": int(stone_physical_top_k),
         "stone_fit_ranker_max_course": int(stone_fit_ranker_max_course),
         "commit_best_rejected": int(commit_best_rejected),
         "base_support_prior": int(bool(base_support_prior)),
@@ -1892,6 +1895,7 @@ def _place_literature_slot(
     pose_risk_weight: float = 0.0,
     stone_fit_ranker: dict[str, Any] | None = None,
     stone_fit_top_k: int = 0,
+    stone_physical_top_k: int = 0,
     commit_best_rejected: bool = False,
     candidate_probe_steps: int = 0,
     candidate_probe_hard_gate: bool = False,
@@ -1927,9 +1931,15 @@ def _place_literature_slot(
     )
     if not pool:
         raise RuntimeError("No unused stones are available for literature_column placement.")
+    if stone_physical_top_k > 0:
+        physical_pool = pool[: max(1, min(int(stone_physical_top_k), len(pool)))]
+    else:
+        physical_pool = list(pool)
+    physical_pool_size = len(physical_pool)
+    skipped_by_physical_budget = max(0, len(pool) - physical_pool_size)
 
     best_score = float("inf")
-    best_rock_index = pool[0]
+    best_rock_index = physical_pool[0]
     best_qpos = qpos0.copy()
     best_qvel = qvel0.copy()
     best_row_state = dict(row_by_index[best_rock_index])
@@ -1941,7 +1951,7 @@ def _place_literature_slot(
     best_feasible_row_state: dict[str, Any] = {}
     best_feasible_selected: dict[str, Any] = {}
 
-    for rock_index in pool:
+    for rock_index in physical_pool:
         row_snapshot = dict(row_by_index[rock_index])
         data.qpos[:] = qpos0
         data.qvel[:] = qvel0
@@ -1963,6 +1973,9 @@ def _place_literature_slot(
             candidate_context={
                 **(candidate_context or {}),
                 "stone_pool_size": len(pool),
+                "stone_physical_pool_size": physical_pool_size,
+                "stone_physical_top_k": int(stone_physical_top_k),
+                "stone_skipped_by_physical_budget": skipped_by_physical_budget,
                 "stone_pool_rock_index": rock_index,
                 **pool_meta.get(rock_index, {}),
             },
@@ -1989,6 +2002,9 @@ def _place_literature_slot(
             best_row_state = dict(row_by_index[rock_index])
             best_selected = dict(selected)
             best_selected["stone_pool_size"] = len(pool)
+            best_selected["stone_physical_pool_size"] = physical_pool_size
+            best_selected["stone_physical_top_k"] = int(stone_physical_top_k)
+            best_selected["stone_skipped_by_physical_budget"] = skipped_by_physical_budget
             best_selected["stone_selection_score"] = score
         if is_feasible and score < best_feasible_score:
             best_feasible_score = score
@@ -1998,6 +2014,9 @@ def _place_literature_slot(
             best_feasible_row_state = dict(row_by_index[rock_index])
             best_feasible_selected = dict(selected)
             best_feasible_selected["stone_pool_size"] = len(pool)
+            best_feasible_selected["stone_physical_pool_size"] = physical_pool_size
+            best_feasible_selected["stone_physical_top_k"] = int(stone_physical_top_k)
+            best_feasible_selected["stone_skipped_by_physical_budget"] = skipped_by_physical_budget
             best_feasible_selected["stone_selection_score"] = score
         row_by_index[rock_index].clear()
         row_by_index[rock_index].update(row_snapshot)
@@ -2013,6 +2032,9 @@ def _place_literature_slot(
             selected["commit_best_rejected"] = 1
             selected["skip_reason"] = ""
             selected["stone_pool_size"] = len(pool)
+            selected["stone_physical_pool_size"] = physical_pool_size
+            selected["stone_physical_top_k"] = int(stone_physical_top_k)
+            selected["stone_skipped_by_physical_budget"] = skipped_by_physical_budget
             selected["stone_selection_score"] = best_score
             return best_rock_index, selected
         data.qpos[:] = qpos0
@@ -2024,6 +2046,10 @@ def _place_literature_slot(
             "commit_best_rejected": 0,
             "best_rejected_score": best_score,
             "best_rejected_rock_index": best_rock_index,
+            "stone_pool_size": len(pool),
+            "stone_physical_pool_size": physical_pool_size,
+            "stone_physical_top_k": int(stone_physical_top_k),
+            "stone_skipped_by_physical_budget": skipped_by_physical_budget,
             **best_selected,
         }
 

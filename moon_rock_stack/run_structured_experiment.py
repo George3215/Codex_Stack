@@ -113,6 +113,7 @@ def main() -> None:
                             "stone_fit_ranker": stone_fit_ranker,
                             "stone_fit_ranker_dir": str(args.stone_fit_ranker_dir.resolve()) if args.stone_fit_ranker_dir else "",
                             "stone_fit_top_k": int(args.stone_fit_top_k),
+                            "stone_physical_top_k": int(args.stone_physical_top_k),
                             "stone_fit_ranker_max_course": int(args.stone_fit_ranker_max_course),
                             "commit_best_rejected": bool(args.commit_best_rejected),
                             "low_release_search": bool(args.low_release_search),
@@ -250,6 +251,15 @@ def parse_args() -> argparse.Namespace:
         help="If a stone-fit ranker is provided, simulate only the top-K ranked stones for each literature/statics slot.",
     )
     parser.add_argument(
+        "--stone-physical-top-k",
+        type=int,
+        default=5,
+        help=(
+            "After stone-fit/prior ranking, run full MuJoCo release/search only on the top-N stones per "
+            "literature/statics slot. Use 0 to simulate the whole selected stone pool."
+        ),
+    )
+    parser.add_argument(
         "--stone-fit-ranker-max-course",
         type=int,
         default=-1,
@@ -365,6 +375,7 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
         pose_risk_ranker_max_course=int(task.get("pose_risk_ranker_max_course", -1)),
         stone_fit_ranker=task.get("stone_fit_ranker"),
         stone_fit_top_k=int(task.get("stone_fit_top_k", 0)),
+        stone_physical_top_k=int(task.get("stone_physical_top_k", 0)),
         stone_fit_ranker_max_course=int(task.get("stone_fit_ranker_max_course", -1)),
         commit_best_rejected=bool(task.get("commit_best_rejected", False)),
         low_release_search=bool(task.get("low_release_search", False)),
@@ -410,6 +421,7 @@ def run_structured_task(task: dict[str, Any]) -> dict[str, Any]:
     detailed["summary"]["pose_risk_ranker_max_course_requested"] = int(task.get("pose_risk_ranker_max_course", -1))
     detailed["summary"]["stone_fit_ranker_dir"] = str(task.get("stone_fit_ranker_dir", ""))
     detailed["summary"]["stone_fit_top_k_requested"] = int(task.get("stone_fit_top_k", 0))
+    detailed["summary"]["stone_physical_top_k_requested"] = int(task.get("stone_physical_top_k", 0))
     detailed["summary"]["stone_fit_ranker_max_course_requested"] = int(task.get("stone_fit_ranker_max_course", -1))
     detailed["summary"]["commit_best_rejected_requested"] = int(bool(task.get("commit_best_rejected", False)))
     detailed["summary"]["low_release_search_requested"] = int(bool(task.get("low_release_search", False)))
@@ -791,6 +803,7 @@ def write_protocol(path: Path, args: argparse.Namespace) -> None:
         f"- pose_risk_ranker_max_course: {args.pose_risk_ranker_max_course}",
         f"- stone_fit_ranker_dir: {args.stone_fit_ranker_dir or ''}",
         f"- stone_fit_top_k: {args.stone_fit_top_k}",
+        f"- stone_physical_top_k: {args.stone_physical_top_k}",
         f"- stone_fit_ranker_max_course: {args.stone_fit_ranker_max_course}",
         f"- low_release_search: {int(bool(args.low_release_search))}",
         f"- release_search_step_m: {args.release_search_step_m}",
