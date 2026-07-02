@@ -1556,17 +1556,6 @@ def _place_for_target_slot(
             strategy=strategy,
             target_name=target_name,
         )
-        if low_release_search and slot.course > 0:
-            candidate = _lower_candidate_release_height(
-                mujoco=mujoco,
-                model=model,
-                data=data,
-                row_by_index=row_by_index,
-                rock_index=rock_index,
-                candidate=candidate,
-                search_step_m=release_search_step_m,
-                extra_clearance_m=release_extra_clearance_m,
-            )
         ranker_prob = _candidate_ranker_prob(
             candidate_pose_ranker,
             candidate_context or {},
@@ -1605,6 +1594,19 @@ def _place_for_target_slot(
     for candidate_id, candidate, ranker_prob, risk_prob, rank_score, ranker_rank in candidate_items:
         data.qpos[:] = qpos0
         data.qvel[:] = qvel0
+        if low_release_search and slot.course > 0:
+            candidate = _lower_candidate_release_height(
+                mujoco=mujoco,
+                model=model,
+                data=data,
+                row_by_index=row_by_index,
+                rock_index=rock_index,
+                candidate=candidate,
+                search_step_m=release_search_step_m,
+                extra_clearance_m=release_extra_clearance_m,
+            )
+            data.qpos[:] = qpos0
+            data.qvel[:] = qvel0
         _set_freejoint_pose(model, data, rock_index, candidate["pos"], candidate["quat"])
         mujoco.mj_forward(model, data)
         _simulate_until_quiet(mujoco, model, data, steps_per_rock)
@@ -2145,7 +2147,8 @@ def _literature_stone_pool(
         )
         scored.append((hybrid_score, -float(prob), rock_index, row, experience_meta))
     scored.sort(key=lambda item: (item[0], item[1], item[2]))
-    top_k = min(max(1, stone_fit_top_k if stone_fit_top_k > 0 else pool_size), len(scored))
+    requested_top_k = max(1, int(stone_fit_top_k)) if stone_fit_top_k > 0 else pool_size
+    top_k = min(requested_top_k, pool_size, len(scored))
     pool = [rock_index for _hybrid, _neg_prob, rock_index, _row, _experience in scored[:top_k]]
     meta: dict[int, dict[str, Any]] = {}
     for rank, (hybrid_score, neg_prob, rock_index, _row, experience_meta) in enumerate(scored[:top_k]):
