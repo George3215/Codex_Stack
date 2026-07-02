@@ -244,19 +244,24 @@ def render_case(xml_path: Path, qpos: np.ndarray, qvel: np.ndarray, case_dir: Pa
         plt.imsave(depth_png_path, depth_vis, cmap="magma")
         written.extend([str(depth_png_path), str(depth_npy_path)])
 
-        renderer.disable_depth_rendering()
-        renderer.enable_segmentation_rendering()
-        renderer.update_scene(data, camera=cam)
-        segmentation = renderer.render()
-        renderer.disable_segmentation_rendering()
-        object_depth = np.where(rock_segmentation_mask(segmentation), depth, np.nan)
-        object_depth_npy_path = case_dir / f"{name}_object_depth.npy"
-        object_depth_npy_path.parent.mkdir(parents=True, exist_ok=True)
-        np.save(object_depth_npy_path, object_depth)
-        object_depth_png_path = case_dir / f"{name}_object_depth.png"
-        object_depth_vis = normalize_depth(object_depth)
-        plt.imsave(object_depth_png_path, object_depth_vis, cmap="magma")
-        written.extend([str(object_depth_png_path), str(object_depth_npy_path)])
+        try:
+            renderer.disable_depth_rendering()
+            renderer.enable_segmentation_rendering()
+            renderer.update_scene(data, camera=cam)
+            segmentation = renderer.render()
+            renderer.disable_segmentation_rendering()
+            object_depth = np.where(rock_segmentation_mask(segmentation), depth, np.nan)
+            object_depth_npy_path = case_dir / f"{name}_object_depth.npy"
+            object_depth_npy_path.parent.mkdir(parents=True, exist_ok=True)
+            np.save(object_depth_npy_path, object_depth)
+            object_depth_png_path = case_dir / f"{name}_object_depth.png"
+            object_depth_vis = normalize_depth(object_depth)
+            plt.imsave(object_depth_png_path, object_depth_vis, cmap="magma")
+            written.extend([str(object_depth_png_path), str(object_depth_npy_path)])
+        except Exception as exc:
+            renderer.disable_segmentation_rendering()
+            case_dir.mkdir(parents=True, exist_ok=True)
+            (case_dir / f"{name}_seg_error.txt").write_text(str(exc), encoding="utf-8")
 
     write_wall_camera_aliases(case_dir, written)
     renderer.close()
